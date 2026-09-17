@@ -1,0 +1,61 @@
+# Release automation.
+#
+# Publishing a GitHub release from a tag is the supported install path: pnpm 10+
+# blocks the `prepare` build for git dependencies and DSH never writes
+# `allowBuilds`, so a plugin with a build step must ship prebuilt `lib/*.js`.
+# A release tarball (or the npm package) is therefore the only reliable
+# distribution channel — see the README's install section.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: build and publish the tarball
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify before publishing
+        run: |
+          npm run build
+          npm run typecheck
+          npm run lint
+          npm test
+
+      - name: Build the release tarball
+        run: npm pack
+
+      - name: Attach the tarball to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: '*.tgz'
+          generate_release_notes: true
+          body: |
+            Install with:
+
+            ```bash
+            dsh plugin --profile web add https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(ls *.tgz)
+            ```
+
+            Or install from npm once published:
+
+            ```bash
+            dsh plugin --profile web add dsh-advanced-provider-settings
+            ```

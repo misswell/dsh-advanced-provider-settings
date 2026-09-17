@@ -1,0 +1,27 @@
+# dsh-advanced-provider-settings — profile bundle patch layer
+#
+# Declared by package.json `dsh.bundle.patch`, so `dsh plugin --profile web add`
+# registers this package as a profile composition layer rather than an inert
+# dependency. The HOST half mounts on `dsh web` startup (and in headless runs
+# that load the same profile):
+#
+#   * registers the `dsh-advanced-provider-settings` settings namespace that
+#     owns global request headers and this plugin's UI preferences;
+#   * installs the request-scoped header bridge on the `llm/stream` waterfall;
+#   * registers the same-origin RPC routes under
+#     /dsh-advanced-provider-settings/* used by the browser half, when a web
+#     server is present.
+#
+# The BROWSER half (lib/client.js) is served to the web shell separately and
+# adds the "Advanced Settings" area to every llm-pi-ai provider card on the
+# Models page, plus the "Provider Advanced" page and a Models-page footer line.
+#
+# NOTE: no `inject` is declared here. The plugin's own service wait lives in its
+# `export const inject = ['settings', 'llm']`, and `webServer` is deliberately
+# NOT part of it: the host half reaches the web server through `ctx.get()`, so a
+# composition without one (a headless profile, an SDK embed) still mounts the
+# settings namespace and the header bridge. Listing `webServer` here would make
+# the whole plugin wait for a service such a composition never provides.
+- insert:
+    - id: advanced-provider-settings
+      name: dsh-advanced-provider-settings

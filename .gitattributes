@@ -1,0 +1,9 @@
+# Built bundles are committed on purpose: DeepSeek Harness's `dsh plugin` has no
+# build step and pnpm 10+ blocks a git dependency's `prepare` script, so a plugin
+# that needs building must ship its output. See .gitignore for the full note.
+lib/** linguist-generated=true -diff
+lib/**/*.map linguist-generated=true -diff
+
+# Keep the reconnaissance documents out of language statistics: they are prose
+# notes with code excerpts, not sources.
+docs/recon/** linguist-documentation=true

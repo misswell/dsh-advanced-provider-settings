@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Local release artifact (regenerate with `npm pack`)
+*.tgz
+
+# Editor / OS
+.DS_Store
+*.log
+
+# Local scratch
+.tmp/
+coverage/
+
+# NOTE: lib/ is deliberately NOT ignored.
+#
+# DeepSeek Harness's `dsh plugin` command is a bare pnpm forwarder with no build
+# step, and pnpm 10+ blocks the `prepare` script of a git dependency until the
+# user allows it in `allowBuilds`. A plugin with a build step therefore cannot
+# rely on being built at install time, so the bundles are built here and
+# committed. `.gitattributes` marks them generated so they do not drown a diff.
