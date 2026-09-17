@@ -39,12 +39,18 @@ jobs:
           npm run lint
           npm test
 
-      # Compute the filename here: the `body:` input below is not a shell, so a
-      # `$(ls *.tgz)` substitution written into it would be published verbatim
-      # instead of expanded.
+      - name: Build the release tarball
+        run: npm pack
+
+      # Resolve the filename in a step: the `body:` input below is not a shell,
+      # so a `$(ls *.tgz)` substitution written into it would be published
+      # verbatim instead of expanded. This also fails loudly if `npm pack`
+      # produced nothing, which is how the missing step above was caught.
       - name: Resolve the tarball name
         id: tarball
-        run: echo "name=$(basename "$(ls *.tgz)")" >> "$GITHUB_OUTPUT"
+        run: |
+          ls -la ./*.tgz
+          echo "name=$(basename "$(ls ./*.tgz)")" >> "$GITHUB_OUTPUT"
 
       - name: Attach the tarball to the release
         uses: softprops/action-gh-release@v2
