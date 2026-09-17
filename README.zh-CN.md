@@ -65,7 +65,7 @@ dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-s
 # 发布到 npm 后
 dsh plugin --profile web add dsh-advanced-provider-settings
 
-# 直接从仓库安装（需要可构建的 git 安装路径，见「已知问题」）
+# 直接从仓库安装 —— 无需构建，也无需发布 npm
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 ```
 

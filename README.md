@@ -63,15 +63,19 @@ adds UI through the Models page's **declared extension slots**, and it reads and
 Requires DeepSeek Harness `0.1.5-rc.2` or a compatible build, and Node.js 20+.
 
 ```bash
-# From a GitHub release tarball
+# Straight from the repository — no build step, no npm publish
+dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
+
+# From a GitHub release tarball (a fixed, content-hashed artifact)
 dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.1.0/dsh-advanced-provider-settings-0.1.0.tgz
 
 # From npm, once published
 dsh plugin --profile web add dsh-advanced-provider-settings
-
-# Directly from the repository (needs a build-capable git install; see Known issues)
-dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 ```
+
+All three work without a build on your machine. `lib/` is committed on purpose: `dsh plugin` runs
+no build step, and pnpm 10+ blocks a git dependency's `prepare` script, so a plugin that needs
+building must ship its output.
 
 Then restart the web UI:
 
@@ -210,9 +214,11 @@ docs/recon/    the source-level reconnaissance this implementation is based on
 
 ## Known issues
 
-- **`npm pack` and `git` installs build from source.** The published tarball includes `lib/`.
-  Installing straight from a git URL requires a build-capable install path, which pnpm 10's
-  `allowBuilds` policy may refuse. Prefer the release tarball or the npm package.
+- **A git install fetches the whole repository, not just the package.** It works with no build —
+  `lib/` is committed precisely so it does — but it also pulls `src/`, `tests/` and `docs/`, and the
+  revision you get is whatever the branch tip is at that moment. Use the release tarball if you want
+  a fixed, content-hashed artifact. If you fork this, keep `lib/` committed and keep the `prepack`
+  script from becoming a `prepare` script, or git installs will start failing for everyone downstream.
 - **Harness UI internals can change between minor versions.** If a future release renames a slot or
   changes its owner props, the affected seat renders nothing rather than throwing — but the feature
   is gone until this plugin is updated. The Diagnostics panel makes that visible.
