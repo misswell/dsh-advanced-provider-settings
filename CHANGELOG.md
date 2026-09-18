@@ -7,7 +7,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+**The configuration surface is visual rather than a form.** A field that showed `supportsStore` as
+its label, or `300000` in a box with no unit, tells you what a value is but not what it does. Every
+control now answers one of the questions a form leaves open.
+
+- **Every identifier is named and explained.** All 26 `compat` flags, the seven thinking levels, the
+  four transports, the three cache-retention tiers and the compat enum options have real labels and
+  a one-line description in both locales (about 145 new keys per dictionary). The wire identifier is
+  kept as a monospace subtitle so it can still be matched against provider documentation.
+- **Compat flags are grouped by what they change** — request fields, streaming, reasoning, tool
+  calls, caching — with a per-group count of how many members are overridden, and a filter that
+  appears once the list is long enough to need one. Tri-state is preserved: `Inherit` is not `Off`.
+- **Durations and byte budgets became sliders** with the legal range, a tick showing where the
+  inherited default sits, and unit-aware rendering — `5 min`, `10 MiB` — so a value that is off by a
+  factor of 1000 is visible rather than plausible. `Reset to inherited` removes the override instead
+  of pinning today's number. Retry delays keep a plain input — a policy's delays are always concrete
+  once it exists, so inherit/reset would be a lie there — but now state their duration in words
+  beside the millisecond count.
+- **A dot and a word per field** state whether the value is yours or inherited, replacing the
+  previous `OverrideTag`, so a column of them can be scanned vertically.
+- **The retry policy is drawn** as a backoff curve: one bar per attempt, sized by the real delay,
+  with the total wait.
+- **The effort ladder** shows the five thinking levels that reach the wire and says explicitly that
+  `xhigh` and `max` are folded to `high`.
+- **The panel opens on what you changed** (headers plus every section carrying an override) instead
+  of on eight collapsed rows, so returning to a field does not mean hunting for it.
+
+### Fixed
+
+- **A wide enum control squeezed its own label into a vertical ribbon.** On `thinkingFormat`, whose
+  13 options are the widest control in the panel, the rigid two-column flag row left the label one
+  character wide. Flag rows now wrap, and the group's control moves below the text when it does not
+  fit.
+- **`chatTemplateKwargs` and `chatTemplateArgs` were unusable.** Both are `dict` fields and fell
+  through to the enum branch, which has no options for them, so an already-set value rendered as
+  `[object Object]` and could not be edited. They now accept JSON, and a half-typed object is
+  discarded rather than written.
+- **`formatBytes` is reachable and consistent with the Vision section.** It quotes KiB/MiB/GiB to
+  match the schema's powers of two, and byte fields now echo their magnitude instead of showing a
+  bare count.
 
 ## [0.1.0] — 2025-09-17
 

@@ -99,11 +99,31 @@ the keys under `providers.<id>` in `~/.dsh/settings.yaml` by hand.
 
 1. Open **Settings → Models**.
 2. Expand any OpenAI-compatible provider card. **Advanced Settings** appears under it.
-3. Each section shows a status chip in the collapsed header, so you can see at a glance what is
-   overridden and what is still inheriting Harness defaults.
+3. The panel opens on **what you have changed**: headers, plus every section that already carries an
+   override. Sections you have not touched stay collapsed, with a status chip in the header.
 4. Edit, then **Save**. Changes are written as path-addressed operations against the namespace
    revision you were reading, so a concurrent edit is refused rather than silently clobbered.
 5. **Global headers** and diagnostics live on their own page: **Settings → Provider Advanced**.
+
+### Reading the controls
+
+- **A dot and a word** on each numeric field say whether the value is yours (`Overridden`) or
+  inherited (`Inherited`). **Reset to inherited** removes the override so the value tracks Harness
+  again instead of being pinned to today's number.
+- **Sliders** carry the legal range, and a tick on the track marks where the inherited default
+  sits. Durations read as `5 min` and image budgets as `10 MiB`, so a value that is off by a factor
+  of 1000 is visible rather than plausible.
+- **The effort ladder** shows the five thinking levels that reach the wire. `xhigh` and `max` are
+  accepted by the schema but folded to `high` before the request leaves, and the ladder says so
+  instead of offering a granularity that does not exist.
+- **The backoff curve** draws the retry policy: one bar per attempt, sized by the real delay, with
+  the total wait. `4 retries, 500 ms, doubling, capped at 8 s` is a shape, and it is easier to
+  sanity-check as one.
+- **Compatibility flags** are grouped by what they change — request fields, streaming, reasoning,
+  tool calls, caching — each with a plain-language name and a one-line explanation. The wire
+  identifier is kept as a monospace subtitle so you can still match it against provider docs, and
+  a filter appears once the list is long enough to need one. Three states are kept per flag:
+  `Inherit` is not the same as `Off`, because it leaves the decision to the adapter.
 
 ## Three behaviours that surprise people
 
@@ -225,10 +245,10 @@ docs/recon/    the source-level reconnaissance this implementation is based on
 - **Route-level compatibility flags that the protocol does not read are reported, not blocked.**
   Harness silently skips them; this plugin flags them so the mistake is visible, but still lets you
   save. A *model-level* mismatch is refused, because Harness treats it as a hard error.
-- **Static English strings in a few technical places.** Compatibility flag names (`supportsStore`,
-  `thinkingFormat`, …) are identifiers and are shown verbatim rather than translated; their
-  descriptions are English tooltips. All UI copy is otherwise localized (English and Simplified
-  Chinese).
+- **Enum *values* that are wire syntax keep their literal spelling.** A thinking format is shown
+  as `deepseek` or `chat_template_kwargs` because that string is what the endpoint receives and
+  what provider documentation names; translating it would break the correspondence. The field
+  *names*, the groups they sit in, the option descriptions and every level are localized.
 - **Provider failover is out of scope.** It is deliberately deferred and not attempted here.
 - **A package the loader cannot locate is skipped in silence.** If a plugin's `exports` map does
   not resolve, its browser half simply never loads — no error, no log, no diagnostic. This package

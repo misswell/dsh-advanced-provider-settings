@@ -79,9 +79,19 @@ export declare const CACHE_RETENTIONS: readonly ["none", "short", "long"];
 /** Value kind every compat field takes, for input dispatch. */
 export type CompatFieldKind = 'boolean' | 'enum' | 'dict' | 'number';
 /** One compatibility field and the protocols it actually affects. */
+/**
+ * Compat fields are grouped by what they change about the outgoing request, so
+ * the panel can label clusters instead of presenting 26 flat toggles. The
+ * grouping is about meaning, not about which protocol declares the field.
+ */
+export type CompatGroupId = 'request' | 'streaming' | 'reasoning' | 'tools' | 'caching' | 'misc';
+/** Display order of the compat groups. */
+export declare const COMPAT_GROUPS: readonly CompatGroupId[];
 export interface CompatFieldDef {
     /** Field name inside `compat`. */
     readonly key: string;
+    /** What this field changes about the request. */
+    readonly group: CompatGroupId;
     /** Value kind, choosing the input control. */
     readonly kind: CompatFieldKind;
     /**

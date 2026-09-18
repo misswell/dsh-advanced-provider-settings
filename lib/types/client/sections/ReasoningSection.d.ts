@@ -4,7 +4,8 @@
  *
  * `xhigh` and `max` are offered as levels because the schema accepts them, with
  * a note that DSH folds both onto the `high` budget — otherwise a user setting
- * an `xhigh` budget of 128k would silently get 16k.
+ * an `xhigh` budget of 128k would silently get 16k. The ladder makes that fold
+ * visible instead of leaving it to a paragraph nobody reads.
  */
 import type { ReactNode } from 'react';
 import type { Translate } from '../contract.js';

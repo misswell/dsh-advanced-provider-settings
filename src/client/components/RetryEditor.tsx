@@ -27,6 +27,7 @@ import {
 } from '../../shared/retry.js'
 import { cls } from '../styles.js'
 import { Notice, NumberField, Field, Toolbar } from './primitives.js'
+import { BackoffCurve, formatDuration } from './visual.js'
 import type { Translate } from '../contract.js'
 import type { RetryEditorState } from '../../shared/retry.js'
 
@@ -238,6 +239,7 @@ export function RetryEditor(props: {
             <NumberField
               id="aps-retry-initial"
               label={t('retry.initialDelayMs')}
+              hint={formatDuration(state.initialDelayMs, t)}
               value={state.initialDelayMs}
               min={1}
               max={MAX_TIMER_DELAY_MS}
@@ -249,6 +251,7 @@ export function RetryEditor(props: {
             <NumberField
               id="aps-retry-maxdelay"
               label={t('retry.maxDelayMs')}
+              hint={formatDuration(state.maxDelayMs, t)}
               value={state.maxDelayMs}
               min={1}
               max={MAX_TIMER_DELAY_MS}
@@ -271,6 +274,17 @@ export function RetryEditor(props: {
               onChange={(next) => { onChange({ ...state, jitterRatio: next ?? 0 }) }}
             />
           </div>
+
+          {/* `always` retries until the route succeeds, so there is no finite
+              curve to draw; the schema also drops maxRetries in that mode. */}
+          {state.mode === 'normal' ? (
+            <BackoffCurve
+              t={t}
+              retries={state.maxRetries}
+              initialMs={state.initialDelayMs}
+              maxMs={state.maxDelayMs}
+            />
+          ) : null}
 
           <Toolbar>
             <Tag tone={state.mode === 'always' ? 'warning' : 'neutral'}>

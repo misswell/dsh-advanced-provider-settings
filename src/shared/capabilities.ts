@@ -145,9 +145,28 @@ export const CACHE_RETENTIONS = ['none', 'short', 'long'] as const
 export type CompatFieldKind = 'boolean' | 'enum' | 'dict' | 'number'
 
 /** One compatibility field and the protocols it actually affects. */
+/**
+ * Compat fields are grouped by what they change about the outgoing request, so
+ * the panel can label clusters instead of presenting 26 flat toggles. The
+ * grouping is about meaning, not about which protocol declares the field.
+ */
+export type CompatGroupId = 'request' | 'streaming' | 'reasoning' | 'tools' | 'caching' | 'misc'
+
+/** Display order of the compat groups. */
+export const COMPAT_GROUPS: readonly CompatGroupId[] = [
+  'request',
+  'streaming',
+  'reasoning',
+  'tools',
+  'caching',
+  'misc',
+]
+
 export interface CompatFieldDef {
   /** Field name inside `compat`. */
   readonly key: string
+  /** What this field changes about the request. */
+  readonly group: CompatGroupId
   /** Value kind, choosing the input control. */
   readonly kind: CompatFieldKind
   /**
@@ -174,36 +193,42 @@ export const COMPAT_FIELDS: readonly CompatFieldDef[] = [
   // -- OpenAI-compatible completions -------------------------------------
   {
     key: 'supportsStore',
+    group: 'request',
     kind: 'boolean',
     protocols: ['openai-completions'],
     note: 'Whether the endpoint accepts the `store` request field.',
   },
   {
     key: 'supportsDeveloperRole',
+    group: 'request',
     kind: 'boolean',
     protocols: ['openai-completions', 'openai-responses'],
     note: 'Whether the endpoint accepts the `developer` role instead of `system`.',
   },
   {
     key: 'supportsReasoningEffort',
+    group: 'reasoning',
     kind: 'boolean',
     protocols: ['openai-completions'],
     note: 'Whether the endpoint accepts `reasoning_effort`.',
   },
   {
     key: 'supportsUsageInStreaming',
+    group: 'streaming',
     kind: 'boolean',
     protocols: ['openai-completions'],
     note: 'Whether `stream_options.include_usage` is accepted.',
   },
   {
     key: 'supportsFinishReason',
+    group: 'streaming',
     kind: 'boolean',
     protocols: ['openai-completions'],
     note: 'Whether streamed chunks carry a finish reason.',
   },
   {
     key: 'maxTokensField',
+    group: 'request',
     kind: 'enum',
     protocols: ['openai-completions'],
     options: MAX_TOKENS_FIELDS,
@@ -211,30 +236,35 @@ export const COMPAT_FIELDS: readonly CompatFieldDef[] = [
   },
   {
     key: 'requiresToolResultName',
+    group: 'tools',
     kind: 'boolean',
     protocols: ['openai-completions'],
     note: 'Whether tool results must repeat the tool name.',
   },
   {
     key: 'requiresAssistantAfterToolResult',
+    group: 'tools',
     kind: 'boolean',
     protocols: ['openai-completions'],
     note: 'Whether an assistant turn must follow tool results.',
   },
   {
     key: 'requiresThinkingAsText',
+    group: 'reasoning',
     kind: 'boolean',
     protocols: ['openai-completions'],
     note: 'Whether thinking must be sent as <thinking> text.',
   },
   {
     key: 'requiresReasoningContentOnAssistantMessages',
+    group: 'reasoning',
     kind: 'boolean',
     protocols: ['openai-completions'],
     note: 'Whether replayed assistant turns need an empty reasoning_content.',
   },
   {
     key: 'thinkingFormat',
+    group: 'reasoning',
     kind: 'enum',
     protocols: ['openai-completions'],
     options: THINKING_FORMATS,
@@ -242,24 +272,28 @@ export const COMPAT_FIELDS: readonly CompatFieldDef[] = [
   },
   {
     key: 'chatTemplateKwargs',
+    group: 'reasoning',
     kind: 'dict',
     protocols: ['openai-completions'],
     note: '`chat_template_kwargs` map (chat-template thinking formats).',
   },
   {
     key: 'chatTemplateArgs',
+    group: 'reasoning',
     kind: 'dict',
     protocols: ['openai-completions'],
     note: '`chat_template_args` map (baseten thinking format).',
   },
   {
     key: 'supportsThinkingTokenBudget',
+    group: 'reasoning',
     kind: 'boolean',
     protocols: ['openai-completions'],
     note: 'Alias enabling the vLLM thinking budget field.',
   },
   {
     key: 'thinkingTokenBudgetField',
+    group: 'reasoning',
     kind: 'enum',
     protocols: ['openai-completions'],
     options: THINKING_TOKEN_BUDGET_FIELDS,
@@ -267,12 +301,14 @@ export const COMPAT_FIELDS: readonly CompatFieldDef[] = [
   },
   {
     key: 'vllmPriority',
+    group: 'misc',
     kind: 'number',
     protocols: ['openai-completions'],
     note: 'vLLM scheduler priority (needs --scheduling-policy priority).',
   },
   {
     key: 'cacheControlFormat',
+    group: 'caching',
     kind: 'enum',
     protocols: ['openai-completions'],
     options: CACHE_CONTROL_FORMATS,
@@ -280,6 +316,7 @@ export const COMPAT_FIELDS: readonly CompatFieldDef[] = [
   },
   {
     key: 'supportsStrictMode',
+    group: 'tools',
     kind: 'boolean',
     protocols: ['openai-completions', 'openai-responses'],
     note: 'Whether tool definitions accept `strict`.',
@@ -287,6 +324,7 @@ export const COMPAT_FIELDS: readonly CompatFieldDef[] = [
   // -- OpenAI Responses --------------------------------------------------
   {
     key: 'supportsMaxOutputTokens',
+    group: 'request',
     kind: 'boolean',
     protocols: ['openai-responses'],
     note: 'Whether `max_output_tokens` is accepted.',
@@ -294,6 +332,7 @@ export const COMPAT_FIELDS: readonly CompatFieldDef[] = [
   // -- Shared by every protocol -----------------------------------------
   {
     key: 'supportsLongCacheRetention',
+    group: 'caching',
     kind: 'boolean',
     protocols: ['openai-completions', 'openai-responses', 'anthropic-messages'],
     note: 'Whether long (24h / 1h TTL) prompt cache retention is supported.',
@@ -301,36 +340,42 @@ export const COMPAT_FIELDS: readonly CompatFieldDef[] = [
   // -- Anthropic Messages ------------------------------------------------
   {
     key: 'supportsEagerToolInputStreaming',
+    group: 'tools',
     kind: 'boolean',
     protocols: ['anthropic-messages'],
     note: 'Whether per-tool eager_input_streaming is accepted.',
   },
   {
     key: 'supportsCacheControlOnTools',
+    group: 'caching',
     kind: 'boolean',
     protocols: ['anthropic-messages'],
     note: 'Whether cache_control is accepted on tool definitions.',
   },
   {
     key: 'supportsTemperature',
+    group: 'request',
     kind: 'boolean',
     protocols: ['anthropic-messages'],
     note: 'Whether the temperature field is accepted.',
   },
   {
     key: 'forceAdaptiveThinking',
+    group: 'reasoning',
     kind: 'boolean',
     protocols: ['anthropic-messages'],
     note: 'Force thinking.type "adaptive" plus output_config.effort.',
   },
   {
     key: 'allowEmptySignature',
+    group: 'reasoning',
     kind: 'boolean',
     protocols: ['anthropic-messages'],
     note: 'Replay empty thinking signatures instead of converting to text.',
   },
   {
     key: 'supportsStrictTools',
+    group: 'tools',
     kind: 'boolean',
     protocols: ['anthropic-messages'],
     note: 'Whether Anthropic strict tool schemas are accepted.',

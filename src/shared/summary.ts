@@ -76,6 +76,47 @@ export function providerClaimsImages(profile: ProviderProfile): boolean {
 }
 
 /**
+ * A panel section id. These differ from summary ids where two summaries share a
+ * single editor: `timeout` and `transport` are both edited in the Network
+ * section, because a transport is only meaningful next to its timeouts.
+ */
+export type PanelSectionId = 'headers' | 'retry' | 'network' | 'vision' | 'reasoning' | 'compat' | 'models'
+
+/** Which panel section edits each summary. */
+const PANEL_OF: Readonly<Record<AdvancedSectionId, PanelSectionId>> = {
+  headers: 'headers',
+  retry: 'retry',
+  timeout: 'network',
+  transport: 'network',
+  vision: 'vision',
+  reasoning: 'reasoning',
+  compatibility: 'compat',
+  models: 'models',
+}
+
+/**
+ * The sections to open when the panel first mounts.
+ *
+ * Headers always, because it is the most-used editor — and then every section
+ * that already carries an override. Opening on what you changed is the whole
+ * point: a panel that starts fully collapsed makes you click through rows to
+ * find the field you came back to edit, and hides the fact that anything is
+ * configured at all.
+ *
+ * @param profile - the profile as read.
+ * @returns panel section ids, in display order.
+ */
+export function initiallyExpandedSections(profile: ProviderProfile): readonly PanelSectionId[] {
+  const ids: PanelSectionId[] = ['headers']
+  for (const section of summarizeSections(profile)) {
+    if (section.status.kind === 'default') continue
+    const panel = PANEL_OF[section.id]
+    if (!ids.includes(panel)) ids.push(panel)
+  }
+  return ids
+}
+
+/**
  * Whether any plugin-managed key is set on the profile or its models.
  * @param profile - the profile as read.
  * @returns whether anything is configured.

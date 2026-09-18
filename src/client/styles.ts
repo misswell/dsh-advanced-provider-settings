@@ -15,6 +15,65 @@ const PLUGIN_ID = 'dsh-advanced-provider-settings'
 
 /** Stylesheet source. Kept in one string so the whole surface ships together. */
 const CSS = `
+/* Value-source dot: green when set here, hollow when inherited. */
+.aps-source{display:inline-flex;align-items:center;gap:4px;font-size:11px;opacity:.72;white-space:nowrap}
+.aps-source[data-overridden="true"]{opacity:1;color:var(--dsw-accent,#679efe)}
+
+/* Slider: the track shows the legal range, the tick the inherited default. */
+.aps-slider{display:flex;flex-direction:column;gap:2px;min-width:0}
+.aps-slider-track{position:relative;height:4px;border-radius:2px;background:var(--dsw-surface-3,rgba(128,128,128,.16));margin:6px 0 -12px}
+.aps-slider-fill{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--dsw-accent,#679efe);opacity:.5}
+.aps-slider-inherited{position:absolute;top:-3px;width:2px;height:10px;border-radius:1px;background:var(--dsw-text-1,#f9fafb);opacity:.45}
+.aps-slider-input{width:100%;margin:0;accent-color:var(--dsw-accent,#679efe);background:transparent}
+.aps-slider-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.aps-slider-value{font-size:11.5px;opacity:.8;font-variant-numeric:tabular-nums}
+.aps-slider-default{font-size:11px;opacity:.55;font-variant-numeric:tabular-nums}
+
+/* Backoff curve: bar length is proportional to the wait. */
+.aps-curve{display:flex;flex-direction:column;gap:4px;padding:8px;border-radius:6px;background:var(--dsw-surface-2,rgba(128,128,128,.05));border:1px solid var(--dsw-border-1,rgba(128,128,128,.2))}
+.aps-curve-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;font-weight:500}
+.aps-curve-total{font-size:11px;opacity:.66;font-weight:400;font-variant-numeric:tabular-nums}
+.aps-curve-row{display:grid;grid-template-columns:64px 1fr 74px;align-items:center;gap:8px;font-size:11.5px}
+.aps-curve-label{opacity:.72}
+.aps-curve-bar-track{height:8px;border-radius:2px;background:var(--dsw-surface-3,rgba(128,128,128,.12));overflow:hidden}
+.aps-curve-bar{display:block;height:100%;border-radius:2px;background:var(--dsw-accent,#679efe);opacity:.75;min-width:2px}
+.aps-curve-value{text-align:right;font-variant-numeric:tabular-nums;opacity:.85}
+
+/* Effort ladder: five stops that reach the wire. */
+.aps-ladder{display:flex;flex-direction:column;gap:4px}
+.aps-ladder-row{display:flex;align-items:flex-end;gap:3px}
+.aps-ladder-step{flex:1;display:flex;flex-direction:column;gap:3px;align-items:center;min-width:0}
+.aps-ladder-bar{width:100%;height:5px;border-radius:2px;background:var(--dsw-surface-3,rgba(128,128,128,.18))}
+.aps-ladder-step[data-reached="true"] .aps-ladder-bar{background:var(--dsw-accent,#679efe);opacity:.55}
+.aps-ladder-step[data-active="true"] .aps-ladder-bar{opacity:1;height:9px}
+.aps-ladder-name{font-size:10.5px;opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.aps-ladder-step[data-active="true"] .aps-ladder-name{opacity:1;font-weight:600}
+
+/* Cluster heading for a group of related flags. */
+.aps-group-head{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:4px;padding-top:6px;border-top:1px solid var(--dsw-border-1,rgba(128,128,128,.16))}
+.aps-group-title{font-weight:600;font-size:12px}
+.aps-group-count{font-size:11px;opacity:.6;font-variant-numeric:tabular-nums;padding:0 4px;border-radius:3px;background:var(--dsw-surface-3,rgba(128,128,128,.14))}
+.aps-group-note{font-size:11px;opacity:.6;flex:1;min-width:0}
+
+/* A flag row: label + note on the left, control on the right. */
+/* The control can be a 12-option enum, so the row wraps instead of squeezing
+   the label: a rigid two-column layout turns the label into a vertical ribbon
+   one character wide, which is worse than a taller row. */
+.aps-flag{display:flex;align-items:flex-start;gap:10px;padding:5px 0;flex-wrap:wrap}
+.aps-flag-text{flex:1 1 260px;min-width:220px;display:flex;flex-direction:column;gap:1px}
+.aps-flag-label{font-size:12px;font-weight:500;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.aps-flag-note{font-size:11px;opacity:.6;line-height:1.45}
+.aps-flag-control{flex:1 1 auto;display:flex;align-items:center;gap:6px;justify-content:flex-end}
+.aps-flag-control [role="radiogroup"]{justify-content:flex-end}
+.aps-flag[data-overridden="true"] .aps-flag-label{color:var(--dsw-accent,#679efe)}
+
+.aps-filter{max-width:220px}
+
+/* Grouped flag list: the cluster boundary is a rule, not a box, so nesting
+   does not multiply borders inside the panel. */
+.aps-flag-groups{display:flex;flex-direction:column;gap:10px}
+.aps-flag-group{display:flex;flex-direction:column;gap:2px}
+.aps-flag-key{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;opacity:.5;font-weight:400}
 .aps-root{display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.5;color:var(--dsw-text-1,inherit)}
 .aps-shell{border:1px solid var(--dsw-border-1,rgba(128,128,128,.28));border-radius:8px;overflow:hidden;background:var(--dsw-surface-1,transparent)}
 .aps-shell-header{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;user-select:none;background:var(--dsw-surface-2,rgba(128,128,128,.05))}
@@ -94,6 +153,41 @@ export function injectStyles(): void {
 
 /** Class names used by the client components. */
 export const cls = {
+  source: 'aps-source',
+  slider: 'aps-slider',
+  sliderTrack: 'aps-slider-track',
+  sliderFill: 'aps-slider-fill',
+  sliderInherited: 'aps-slider-inherited',
+  sliderInput: 'aps-slider-input',
+  sliderRow: 'aps-slider-row',
+  sliderValue: 'aps-slider-value',
+  sliderDefault: 'aps-slider-default',
+  curve: 'aps-curve',
+  curveHead: 'aps-curve-head',
+  curveTotal: 'aps-curve-total',
+  curveRow: 'aps-curve-row',
+  curveLabel: 'aps-curve-label',
+  curveBarTrack: 'aps-curve-bar-track',
+  curveBar: 'aps-curve-bar',
+  curveValue: 'aps-curve-value',
+  ladder: 'aps-ladder',
+  ladderRow: 'aps-ladder-row',
+  ladderStep: 'aps-ladder-step',
+  ladderBar: 'aps-ladder-bar',
+  ladderName: 'aps-ladder-name',
+  groupHead: 'aps-group-head',
+  groupTitle: 'aps-group-title',
+  groupCount: 'aps-group-count',
+  groupNote: 'aps-group-note',
+  flag: 'aps-flag',
+  flagText: 'aps-flag-text',
+  flagLabel: 'aps-flag-label',
+  flagNote: 'aps-flag-note',
+  flagControl: 'aps-flag-control',
+  filter: 'aps-filter',
+  flagGroups: 'aps-flag-groups',
+  flagGroup: 'aps-flag-group',
+  flagKey: 'aps-flag-key',
   root: 'aps-root',
   shell: 'aps-shell',
   shellHeader: 'aps-shell-header',

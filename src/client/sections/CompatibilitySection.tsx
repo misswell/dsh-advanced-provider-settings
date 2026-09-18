@@ -12,11 +12,24 @@
  *
  * So the model-level editor is not merely convenient — offering a field there
  * that the protocol does not support would let the user save a broken profile.
+ *
+ * `compat` is the part of the schema most likely to be misused, because its
+ * field names are wire-protocol identifiers that mean nothing without context.
+ * Every flag is therefore rendered with a translated name and a one-line
+ * explanation of what it changes about the outgoing request, clustered by
+ * concern, and the raw identifier is kept only as a monospace subtitle so it
+ * can still be matched against provider documentation.
  */
-import type { ReactNode } from 'react'
-import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
-import { compatFieldsFor, type CompatFieldDef } from '../../shared/capabilities.js'
-import { ChoiceRow, Field, Notice } from '../components/primitives.js'
+import { useMemo, useState, type ReactNode } from 'react'
+import { Button, Input, Pill, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  COMPAT_GROUPS,
+  compatFieldsFor,
+  type CompatFieldDef,
+  type CompatGroupId,
+} from '../../shared/capabilities.js'
+import { Field, Notice } from '../components/primitives.js'
+import { GroupHeader, ValueSource } from '../components/visual.js'
 import { cls } from '../styles.js'
 import type { Translate } from '../contract.js'
 import type { ProviderProfile } from '../../shared/types.js'
@@ -68,7 +81,21 @@ export function CompatibilitySection(props: {
   )
 }
 
-/** The grid of compat controls, reused by the per-model editor. */
+/** Split fields into their groups, preserving {@link COMPAT_GROUPS} order. */
+export function groupCompatFields(
+  fields: readonly CompatFieldDef[],
+): readonly { group: CompatGroupId; fields: readonly CompatFieldDef[] }[] {
+  return COMPAT_GROUPS
+    .map((group) => ({ group, fields: fields.filter((field) => field.group === group) }))
+    .filter((entry) => entry.fields.length > 0)
+}
+
+/**
+ * The grouped compat controls, reused by the per-model editor.
+ *
+ * A filter box appears only once the list is long enough to need one; the
+ * point of the grouping is that most users never need it.
+ */
 export function CompatFieldGrid(props: {
   t: Translate
   fields: readonly CompatFieldDef[]
@@ -77,58 +104,177 @@ export function CompatFieldGrid(props: {
   onChange: (key: string, value: unknown) => void
 }): ReactNode {
   const { t, fields, values, disabled } = props
+  const [filter, setFilter] = useState('')
+
+  const groups = useMemo(() => {
+    const needle = filter.trim().toLowerCase()
+    const narrowed = needle === ''
+      ? fields
+      : fields.filter((field) => {
+        const label = t(`compat.f.${field.key}.label`)
+        const note = t(`compat.f.${field.key}.note`)
+        return `${field.key} ${label} ${note}`.toLowerCase().includes(needle)
+      })
+    return groupCompatFields(narrowed)
+  }, [fields, filter, t])
+
+  const showFilter = fields.length > 8
+
   return (
-    <div className={cls.grid}>
-      {fields.map((field) => {
-        // A tri-state is essential: absent means "let the adapter decide", which
-        // is not the same as `false`.
-        const current = values[field.key]
-        const choice = current === undefined || current === null ? '' : String(current)
-        const options = [
-          { value: '', label: t('common.inherit'), title: t('common.inheritHint') },
-          ...(field.kind === 'boolean'
-            ? [{ value: 'true', label: t('compat.on') }, { value: 'false', label: t('compat.off') }]
-            : (field.options ?? []).map((option) => ({ value: option, label: option }))),
-        ]
-        return (
-          <div key={field.key}>
-            {field.kind === 'number' ? (
-              <Field
-                label={field.key}
-                hint={field.note}
-                accessory={current === undefined ? null : <Tag tone="info">{t('status.custom')}</Tag>}
-              >
-                <input
-                  className={`${cls.mono} ${cls.inputNarrow}`}
-                  type="text"
-                  inputMode="numeric"
-                  aria-label={field.key}
-                  disabled={disabled}
-                  value={choice}
-                  onChange={(event) => {
-                    const raw = event.currentTarget.value.trim()
-                    if (raw === '') props.onChange(field.key, undefined)
-                    else if (/^-?\d+$/.test(raw)) props.onChange(field.key, Number(raw))
-                  }}
-                />
-              </Field>
-            ) : (
-              <ChoiceRow
-                label={field.key}
-                value={choice}
-                options={options}
-                disabled={disabled}
-                accessory={current === undefined ? null : <Tag tone="info">{t('status.custom')}</Tag>}
-                onChange={(next) => {
-                  if (next === '') props.onChange(field.key, undefined)
-                  else if (field.kind === 'boolean') props.onChange(field.key, next === 'true')
-                  else props.onChange(field.key, next)
-                }}
-              />
-            )}
-          </div>
-        )
-      })}
+    <div className={cls.flagGroups}>
+      {showFilter ? (
+        <Input
+          className={cls.filter}
+          type="search"
+          value={filter}
+          disabled={disabled}
+          placeholder={t('compat.filter')}
+          aria-label={t('compat.filter')}
+          onChange={(event) => { setFilter(event.currentTarget.value) }}
+        />
+      ) : null}
+      {groups.length === 0 ? (
+        <p className={cls.hint} style={{ margin: 0 }}>{t('compat.noneMatch')}</p>
+      ) : null}
+      {groups.map((entry) => (
+        <div className={cls.flagGroup} key={entry.group}>
+          <GroupHeader
+            label={t(`compat.group.${entry.group}.label`)}
+            note={t(`compat.group.${entry.group}.note`)}
+            overridden={entry.fields.filter((field) => values[field.key] !== undefined).length}
+            total={entry.fields.length}
+          />
+          {entry.fields.map((field) => (
+            <CompatFlagRow
+              key={field.key}
+              t={t}
+              field={field}
+              value={values[field.key]}
+              disabled={disabled}
+              onChange={(next) => { props.onChange(field.key, next) }}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * One flag: what it means on the left, how it is set on the right.
+ *
+ * A boolean keeps three states rather than two. "Inherit" is not the same as
+ * "off" — it leaves the decision to the adapter — so a two-position switch
+ * would show a value the plugin cannot actually know.
+ */
+export function CompatFlagRow(props: {
+  t: Translate
+  field: CompatFieldDef
+  value: unknown
+  disabled: boolean
+  onChange: (next: unknown) => void
+}): ReactNode {
+  const { t, field, value, disabled } = props
+  const overridden = value !== undefined
+  const label = t(`compat.f.${field.key}.label`)
+
+  const control = (() => {
+    if (field.kind === 'number') {
+      return (
+        <Input
+          className={`${cls.mono} ${cls.inputNarrow}`}
+          type="text"
+          inputMode="numeric"
+          aria-label={label}
+          disabled={disabled}
+          value={value === undefined || value === null ? '' : String(value)}
+          placeholder={t('common.inherit')}
+          onChange={(event) => {
+            const raw = event.currentTarget.value.trim()
+            if (raw === '') props.onChange(undefined)
+            else if (/^-?\d+$/.test(raw)) props.onChange(Number(raw))
+          }}
+        />
+      )
+    }
+
+    if (field.kind === 'dict') {
+      return (
+        <Input
+          className={cls.mono}
+          type="text"
+          aria-label={label}
+          disabled={disabled}
+          value={value === undefined || value === null ? '' : JSON.stringify(value)}
+          placeholder={t('common.inherit')}
+          onChange={(event) => {
+            const raw = event.currentTarget.value.trim()
+            if (raw === '') {
+              props.onChange(undefined)
+              return
+            }
+            try {
+              props.onChange(JSON.parse(raw))
+            } catch {
+              // Keep the typed text in the DOM; a half-written object is not a
+              // value yet, and writing garbage into settings would be worse.
+            }
+          }}
+        />
+      )
+    }
+
+    const options = field.kind === 'boolean'
+      ? [
+        { value: '', label: t('common.inherit'), title: t('common.inheritHint') },
+        { value: 'true', label: t('compat.supported'), title: t(`compat.f.${field.key}.note`) },
+        { value: 'false', label: t('compat.unsupported'), title: t(`compat.f.${field.key}.note`) },
+      ]
+      : [
+        { value: '', label: t('common.inherit'), title: t('common.inheritHint') },
+        ...(field.options ?? []).map((option) => ({
+          value: option,
+          label: t(`compat.option.${option}`),
+          title: t(`compat.f.${field.key}.note`),
+        })),
+      ]
+
+    const current = value === undefined || value === null ? '' : String(value)
+
+    return (
+      <div className={cls.tagList} role="radiogroup" aria-label={label}>
+        {options.map((option) => (
+          <Pill
+            key={option.value}
+            active={option.value === current}
+            title={option.title}
+            role="radio"
+            aria-checked={option.value === current}
+            disabled={disabled}
+            onClick={() => {
+              if (option.value === '') props.onChange(undefined)
+              else if (field.kind === 'boolean') props.onChange(option.value === 'true')
+              else props.onChange(option.value)
+            }}
+          >
+            {option.label}
+          </Pill>
+        ))}
+      </div>
+    )
+  })()
+
+  return (
+    <div className={cls.flag} data-overridden={overridden ? 'true' : 'false'}>
+      <div className={cls.flagText}>
+        <span className={cls.flagLabel}>
+          {label}
+          <code className={cls.flagKey}>{field.key}</code>
+          <ValueSource t={t} overridden={overridden} />
+        </span>
+        <span className={cls.flagNote}>{t(`compat.f.${field.key}.note`)}</span>
+      </div>
+      <div className={cls.flagControl}>{control}</div>
     </div>
   )
 }

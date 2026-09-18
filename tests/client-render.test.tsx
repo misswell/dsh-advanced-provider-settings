@@ -28,10 +28,18 @@ import { ReasoningSection } from '../src/client/sections/ReasoningSection.js'
 import { CompatibilitySection } from '../src/client/sections/CompatibilitySection.js'
 import { ModelsSection } from '../src/client/sections/ModelsSection.js'
 import { PreviewSection } from '../src/client/sections/PreviewSection.js'
+import { BackoffCurve, formatBytes, formatDuration } from '../src/client/components/visual.js'
 import { en } from '../src/client/locales/en-US.js'
 import { headerEntriesOf } from '../src/shared/headers.js'
 import { toRetryEditorState } from '../src/shared/retry.js'
-import { PLUGIN_NAMESPACE, PROVIDER_NAMESPACE } from '../src/shared/capabilities.js'
+import {
+  CACHE_RETENTIONS,
+  COMPAT_FIELDS,
+  PLUGIN_NAMESPACE,
+  PROVIDER_NAMESPACE,
+  THINKING_LEVELS,
+  TRANSPORTS,
+} from '../src/shared/capabilities.js'
 import type {
   ClientContext,
   ProviderDirectoryEntry,
@@ -642,4 +650,195 @@ describe('models footer', () => {
     const h = harness({ providers: {} })
     expect(render(<ModelsFooter ctx={h.ctx} />)).toBe('')
   })
+})
+
+// ---------------------------------------------------------------------------
+// Visual configuration
+// ---------------------------------------------------------------------------
+
+/**
+ * The panel used to be a form: raw identifiers as labels, bare numbers in boxes
+ * with no unit and no way to tell an override from an inherited default. These
+ * tests pin the properties that make it readable rather than the exact markup,
+ * so the layout can keep moving.
+ */
+describe('visual configuration', () => {
+  const t = (key: string, params?: Record<string, string | number>): string =>
+    params === undefined ? key : `${key}(${Object.entries(params).map(([k, v]) => `${k}=${String(v)}`).join(',')})`
+
+  it('names a compat flag instead of showing only its identifier', () => {
+    const html = render(<CompatibilitySection t={t} profile={RICH} disabled={false} onChange={() => {}} />)
+    // The human label is present...
+    expect(html).toContain('compat.f.supportsStore.label')
+    expect(html).toContain('compat.f.supportsStore.note')
+    // ...and the raw identifier survives only as a subtitle, so it can still be
+    // matched against provider documentation without being the primary label.
+    expect(html).toContain('supportsStore')
+    expect(html).toContain('aps-flag-key')
+  })
+
+  it('groups the flags by concern instead of listing 19 of them flat', () => {
+    const html = render(<CompatibilitySection t={t} profile={RICH} disabled={false} onChange={() => {}} />)
+    for (const group of ['request', 'streaming', 'reasoning', 'tools', 'caching']) {
+      expect(html).toContain(`compat.group.${group}.label`)
+    }
+    // vllmPriority is the lone member of `misc` and IS an openai-completions
+    // field, so that cluster appears too; an Anthropic-only flag does not.
+    expect(html).toContain('compat.group.misc.label')
+    expect(html).not.toContain('compat.f.forceAdaptiveThinking.label')
+  })
+
+  it('offers a filter once the flag list is long enough to need one', () => {
+    const long = render(<CompatibilitySection t={t} profile={RICH} disabled={false} onChange={() => {}} />)
+    expect(long).toContain('compat.filter')
+    // Two flags is short enough that a filter would be noise.
+    const short = render(
+      <CompatibilitySection
+        t={t}
+        profile={{ api: 'anthropic-messages' }}
+        disabled={false}
+        onChange={() => {}}
+      />,
+    )
+    expect(short).not.toContain('compat.filter')
+  })
+
+  it('folds xhigh onto the high rung of the effort ladder', () => {
+    const folded = render(
+      <ReasoningSection t={t} profile={{ ...RICH, reasoning: 'xhigh' }} disabled={false} issues={NO_ISSUES} onChange={() => {}} />,
+    )
+    expect(folded).toContain('reasoning.curveFolded')
+    expect(folded).toContain('level.high.label')
+    // A level that reaches the wire unchanged says so instead.
+    const direct = render(
+      <ReasoningSection t={t} profile={{ ...RICH, reasoning: 'medium' }} disabled={false} issues={NO_ISSUES} onChange={() => {}} />,
+    )
+    expect(direct).not.toContain('reasoning.curveFolded')
+  })
+
+  it('marks the inherited default on a numeric slider', () => {
+    const html = render(<NetworkSection t={t} profile={{}} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
+    // The idle timeout inherits Harness's 300000 ms, shown as a readable 5 min
+    // rather than a bare number in a placeholder.
+    expect(html).toContain('field.defaultIs(value=5 unit.min)')
+    expect(html).toContain('aps-slider-inherited')
+    expect(html).toContain('field.inherited')
+  })
+
+  it('offers a reset only once a value is overridden', () => {
+    const inherited = render(<NetworkSection t={t} profile={{}} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
+    expect(inherited).not.toContain('field.resetToDefault')
+
+    const overridden = render(
+      <NetworkSection t={t} profile={{ timeoutMs: 30000 }} disabled={false} issues={NO_ISSUES} onChange={() => {}} />,
+    )
+    expect(overridden).toContain('field.resetToDefault')
+    expect(overridden).toContain('field.overridden')
+    // 30000 ms is rendered the way a person would say it.
+    expect(overridden).toContain('30 unit.s')
+  })
+
+  it('renders byte budgets in binary units rather than raw byte counts', () => {
+    const html = render(<VisionSection t={t} profile={RICH} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
+    // 10485760 bytes is 10 MiB, and the echo says so in the unit the schema
+    // actually means — deliberately not "MB", which would be a different number.
+    expect(html).toContain('10 unit.mib')
+    expect(html).toContain('MiB')
+  })
+
+  it('states a retry delay in words, not only in milliseconds', () => {
+    // 300000 ms is a plausible-looking number and also five minutes; the hazard
+    // this guards against is being wrong by a factor of 1000.
+    const html = render(
+      <RetryEditor
+        t={t}
+        state={{ mode: 'normal', maxRetries: 4, retryableCodes: [], initialDelayMs: 2000, maxDelayMs: 300000, jitterRatio: 0.2 }}
+        disabled={false}
+        issues={NO_ISSUES}
+        acknowledged={false}
+        onAcknowledge={() => {}}
+        onChange={() => {}}
+      />,
+    )
+    expect(html).toContain('2 unit.s')
+    expect(html).toContain('5 unit.min')
+    // ...and the curve below it uses the same numbers.
+    expect(html).toContain('retry.curveTitle')
+  })
+
+  it('formats durations the way a person would say them', () => {
+    expect(formatDuration(500, t)).toBe('500 unit.ms')
+    expect(formatDuration(1000, t)).toBe('1 unit.s')
+    expect(formatDuration(30000, t)).toBe('30 unit.s')
+    expect(formatDuration(120000, t)).toBe('2 unit.min')
+    expect(formatDuration(90000, t)).toBe('1 unit.min 30 unit.s')
+  })
+
+  it('formats byte counts in binary units', () => {
+    expect(formatBytes(512, t)).toBe('512 B')
+    expect(formatBytes(524288, t)).toBe('512 unit.kib')
+    expect(formatBytes(10485760, t)).toBe('10 unit.mib')
+    expect(formatBytes(1073741824, t)).toBe('1 unit.gib')
+  })
+
+  it('draws the retry curve from the policy instead of listing numbers', () => {
+    const html = render(
+      <BackoffCurve t={t} retries={4} initialMs={500} maxMs={8000} factor={2} />,
+    )
+    expect(html).toContain('retry.attempt(n=1)')
+    expect(html).toContain('retry.attempt(n=4)')
+    expect(html).toContain('500 unit.ms')
+    expect(html).toContain('1 unit.s')
+    // 500 + 1000 + 2000 + 4000
+    expect(html).toContain('retry.curveTotal(value=7.5 unit.s)')
+  })
+
+  it('says so rather than drawing nothing when there is no curve to draw', () => {
+    const html = render(<BackoffCurve t={t} retries={0} initialMs={500} />)
+    expect(html).toContain('retry.curveEmpty')
+  })
+
+  it('caps a growing backoff at the configured maximum', () => {
+    const html = render(<BackoffCurve t={t} retries={5} initialMs={1000} maxMs={2000} factor={2} />)
+    // 1000, 2000, then capped at 2000 rather than reaching 4000 and 8000.
+    expect(html).not.toContain('4 unit.s')
+    expect(html).not.toContain('8 unit.s')
+    expect(html).toContain('retry.curveTotal(value=9 unit.s)')
+  })
+
+  it('covers every compat flag with a label and an explanation', () => {
+    // The dictionary is the reason no raw identifier reaches a user; a new flag
+    // added to the table without copy would render its own key as a label.
+    for (const field of COMPAT_FIELDS) {
+      expect(en).toHaveProperty(`compat.f.${field.key}.label`)
+      expect(en).toHaveProperty(`compat.f.${field.key}.note`)
+    }
+    for (const level of THINKING_LEVELS) {
+      expect(en).toHaveProperty(`level.${level}.label`)
+      expect(en).toHaveProperty(`level.${level}.note`)
+    }
+    for (const transport of TRANSPORTS) expect(en).toHaveProperty(`transport.${transport}.label`)
+    for (const retention of CACHE_RETENTIONS) expect(en).toHaveProperty(`cache.${retention}.label`)
+  })
+
+  it('reads every label it needs out of the shipped dictionary', () => {
+    // `renderToStaticMarkup` does not run effects, so the panel body cannot be
+    // reached by expanding it here. Render the sections directly with the
+    // harness's recording translate instead — that is the surface the panel
+    // wraps, and it is where a missing or mistyped key would surface.
+    const h = harness({ providers: { providers: { gateway: RICH } } })
+    const record = h.ctx.locale.bind('test')
+    render(<CompatibilitySection t={record} profile={RICH} disabled={false} onChange={() => {}} />)
+    render(<ReasoningSection t={record} profile={RICH} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
+    render(<NetworkSection t={record} profile={RICH} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
+    render(<VisionSection t={record} profile={RICH} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
+
+    expect(h.requestedKeys.has('compat.f.supportsStore.label')).toBe(true)
+    expect(h.requestedKeys.has('compat.group.request.label')).toBe(true)
+    expect(h.requestedKeys.has('field.inherited')).toBe(true)
+    expect(h.requestedKeys.has('level.high.label')).toBe(true)
+    // The guard the suite relies on is only meaningful if it is not vacuous.
+    expect(h.requestedKeys.size).toBeGreaterThan(80)
+    expect([...h.requestedKeys].filter((key) => !(key in en))).toEqual([])
+})
 })

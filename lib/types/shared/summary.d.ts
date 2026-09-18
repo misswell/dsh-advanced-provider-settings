@@ -59,6 +59,25 @@ export declare function visionModelCount(profile: ProviderProfile): number;
 /** Whether the provider default declares image input. */
 export declare function providerClaimsImages(profile: ProviderProfile): boolean;
 /**
+ * A panel section id. These differ from summary ids where two summaries share a
+ * single editor: `timeout` and `transport` are both edited in the Network
+ * section, because a transport is only meaningful next to its timeouts.
+ */
+export type PanelSectionId = 'headers' | 'retry' | 'network' | 'vision' | 'reasoning' | 'compat' | 'models';
+/**
+ * The sections to open when the panel first mounts.
+ *
+ * Headers always, because it is the most-used editor — and then every section
+ * that already carries an override. Opening on what you changed is the whole
+ * point: a panel that starts fully collapsed makes you click through rows to
+ * find the field you came back to edit, and hides the fact that anything is
+ * configured at all.
+ *
+ * @param profile - the profile as read.
+ * @returns panel section ids, in display order.
+ */
+export declare function initiallyExpandedSections(profile: ProviderProfile): readonly PanelSectionId[];
+/**
  * Whether any plugin-managed key is set on the profile or its models.
  * @param profile - the profile as read.
  * @returns whether anything is configured.

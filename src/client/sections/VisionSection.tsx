@@ -12,6 +12,7 @@ import type { ReactNode } from 'react'
 import { BYTE_UNITS, IMAGE_LIMIT_DEFAULTS, describePixelBudget, fromBytes, toBytes, validateImageLimit, type ByteUnit } from '../../shared/vision.js'
 import { Button, Input, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ChoiceRow, Field, Notice } from '../components/primitives.js'
+import { formatBytes } from '../components/visual.js'
 import { cls } from '../styles.js'
 import type { Translate } from '../contract.js'
 import type { ProviderProfile } from '../../shared/types.js'
@@ -71,7 +72,9 @@ export function VisionSection(props: {
                 key={spec.field}
                 label={t(spec.labelKey)}
                 error={error ?? undefined}
-                hint={spec.pixels === true ? t('vision.pixelBudgetHint', { size: describePixelBudget(source) }) : undefined}
+                hint={spec.pixels === true
+                  ? `${formatBytes(source, t)} — ${t('vision.pixelBudgetHint', { size: describePixelBudget(source) })}`
+                  : formatBytes(source, t)}
                 accessory={current === undefined ? <Tag tone="quiet">{t('preview.inherited')}</Tag> : <Tag tone="info">{t('status.custom')}</Tag>}
               >
                 <div className={cls.fieldRow}>

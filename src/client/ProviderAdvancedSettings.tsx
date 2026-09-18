@@ -21,7 +21,7 @@ import {
   validateRetryPolicy,
   type RetryEditorState,
 } from '../shared/retry.js'
-import { summarizeSections, type SectionSummary } from '../shared/summary.js'
+import { initiallyExpandedSections, summarizeSections, type SectionSummary } from '../shared/summary.js'
 import { cls } from './styles.js'
 import { useProviderDraft, type SaveOutcome } from './draft.js'
 import { useOwnScope, useProviderScope, useRpc, useRpcQuery, useSettingsSnapshot, useTranslate } from './hooks.js'
@@ -83,7 +83,8 @@ function Panel(props: {
   const own = useSettingsSnapshot(ownScope)
 
   const [open, setOpen] = useState(false)
-  const [expanded, setExpanded] = useState<readonly string[]>(['headers'])
+  // Seeded from the committed profile: see `initiallyExpandedSections`.
+  const [expanded, setExpanded] = useState<readonly string[]>(() => [...initiallyExpandedSections(draft.committed)])
   const [headers, setHeaders] = useState<HeaderEntry[]>(() => headerEntriesOf(draft.committed.headers))
   const [retryState, setRetryState] = useState(() => toRetryEditorState(draft.committed.retryPolicy))
   const [alwaysAck, setAlwaysAck] = useState(false)
