@@ -23,7 +23,7 @@
 export const VERIFIED_DSH_VERSION = '0.1.5-rc.2'
 
 /** This plugin's own version. Kept in step with package.json by the build check. */
-export const PLUGIN_VERSION = '0.2.0'
+export const PLUGIN_VERSION = '0.2.1'
 
 /** Namespace owning the OpenAI-compatible provider routes. */
 export const PROVIDER_NAMESPACE = 'llm-pi-ai'

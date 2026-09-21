@@ -169,7 +169,7 @@ export function GlobalSettingsPage(props: { ctx: ClientContext }): ReactNode {
     <div className={cls.root}>
       <header>
         <h2 style={{ margin: '0 0 4px' }}>{t('global.title')}</h2>
-        <p className={cls.hint} style={{ margin: 0 }}>{t('global.desc')}</p>
+        <p className={cls.hint}>{t('global.desc')}</p>
       </header>
 
       {messages(t, message, own)}

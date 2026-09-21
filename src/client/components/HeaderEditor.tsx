@@ -99,7 +99,7 @@ export function HeaderEditor(props: {
   return (
     <div className={cls.section}>
       <div className={cls.headerTable}>
-        {rows.length === 0 ? <p className={cls.hint} style={{ margin: 0 }}>{t('headers.empty')}</p> : null}
+        {rows.length === 0 ? <p className={cls.hint}>{t('headers.empty')}</p> : null}
         {rows.map((row, index) => {
           const issue = issues[index] ?? {}
           const sensitive = isSensitiveHeader(row.name)

@@ -32,21 +32,24 @@ const SIZE = (px: number): string => `calc(${String(px)}px + var(--dsh-content-f
 /** Stylesheet source. Kept in one string so the whole surface ships together. */
 const CSS = `
 /* ---------------------------------------------------------------- structure */
-.aps-root{display:flex;flex-direction:column;gap:10px;font-size:${SIZE(13)};line-height:1.55;color:var(--dsw-alias-label-primary,inherit)}
+.aps-root{display:flex;flex-direction:column;gap:14px;font-size:${SIZE(13)};line-height:1.55;color:var(--dsw-alias-label-primary,inherit)}
 .aps-shell{border:0.5px solid var(--dsw-alias-border-l2,rgba(128,128,128,.28));border-radius:12px;overflow:hidden}
 .aps-shell-header{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;user-select:none;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.05))}
 .aps-shell-header:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.06))}
 .aps-shell-title{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .aps-shell-chevron{transition:transform .15s ease;font-size:${SIZE(10)};color:var(--dsw-alias-label-tertiary,inherit);opacity:.8}
 .aps-shell-chevron[data-open="true"]{transform:rotate(90deg)}
-.aps-shell-body{display:flex;flex-direction:column;gap:10px;padding:12px;border-top:0.5px solid var(--dsw-alias-border-l2,rgba(128,128,128,.2))}
+.aps-shell-body{display:flex;flex-direction:column;gap:8px;padding:10px 12px 12px;border-top:0.5px solid var(--dsw-alias-border-l2,rgba(128,128,128,.2))}
 /* Embedded: the host surface owns the framing, so no border or inset padding. */
-.aps-embedded{display:flex;flex-direction:column;gap:10px}
+.aps-embedded{display:flex;flex-direction:column;gap:8px}
 .aps-embedded>.aps-shell-body{padding:0;border-top:none}
 /* Nested one level below a card of the host's own: the outer surface supplies the
-   fill, so an inner card is a boundary only. */
-.aps-embedded .aps-card{background:transparent}
-.aps-provider-picker{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+   fill, so an inner card is a boundary only, and a lighter one — a smaller radius
+   and a shorter header are what tell the two disclosure levels apart, since both
+   headers carry the same title-plus-badge shape. */
+.aps-embedded .aps-card{background:transparent;border-radius:10px}
+.aps-embedded .aps-card-head{min-height:34px}
+.aps-provider-picker{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
 
 /* ------------------------------------------------------------------- cards */
 .aps-card{border:0.5px solid var(--dsw-alias-border-l2,rgba(128,128,128,.22));border-radius:12px;background:var(--dsw-alias-bg-layer-1,rgba(128,128,128,.03));overflow:hidden}
@@ -55,19 +58,24 @@ const CSS = `
 .aps-card-title{font-size:${SIZE(13)};font-weight:600;color:var(--dsw-alias-label-primary,inherit);background:none;border:none;padding:0;margin:0;font-family:inherit;cursor:pointer;text-align:left}
 .aps-card-chevron{flex:none;color:var(--dsw-alias-label-tertiary,inherit);font-size:${SIZE(10)};transition:transform .15s ease}
 .aps-card-chevron[data-open="true"]{transform:rotate(90deg)}
-.aps-card-desc{font-size:${SIZE(12)};color:var(--dsw-alias-label-tertiary,inherit);margin:0 0 2px;padding:4px 0 2px}
-.aps-card-body{display:flex;flex-direction:column;padding:2px 12px 6px}
+.aps-card-desc{font-size:${SIZE(12)};color:var(--dsw-alias-label-tertiary,inherit);margin:0 0 8px;padding:2px 0 0}
+/* One inset for the whole card: the body pads, and nothing pulls back out of
+   it. A row that hung 10px left of its own card put its hairline, and the empty
+   state's text, outside the column everything else was lined up on. */
+.aps-card-body{display:flex;flex-direction:column;padding:0 12px 10px}
 
 /* -------------------------------------------------------------- one row,
  one setting: text left, one control right, an accent bar when overridden. */
 .aps-section{display:flex;flex-direction:column}
-.aps-row{position:relative;display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;padding:9px 10px;margin:0 -10px;border-top:0.5px solid var(--dsw-alias-border-l1,rgba(128,128,128,.1))}
+.aps-row{position:relative;display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;padding:9px 0;border-top:0.5px solid var(--dsw-alias-border-l1,rgba(128,128,128,.1))}
 .aps-row:first-child{border-top:none}
-.aps-row[data-overridden="true"]{box-shadow:inset 2px 0 0 var(--dsw-alias-brand-primary,#6b9bff)}
+/* The mark sits in the gutter rather than inside the row, so the label stays
+   lined up with every other label in the card. */
+.aps-row[data-overridden="true"]::before{content:"";position:absolute;left:-8px;top:8px;bottom:8px;width:2px;border-radius:2px;background:var(--dsw-alias-brand-primary,#6b9bff)}
 .aps-row-text{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:2px;padding-top:3px}
 .aps-row-label{display:flex;align-items:center;gap:6px;font-size:${SIZE(13)};color:var(--dsw-alias-label-primary,inherit)}
 .aps-row-key{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:${SIZE(11)};color:var(--dsw-alias-label-dimmed,#8a8a8a);font-weight:400}
-.aps-row-note{font-size:${SIZE(12)};line-height:1.5;color:var(--dsw-alias-label-tertiary,inherit)}
+.aps-row-note{margin:0;font-size:${SIZE(12)};line-height:1.5;color:var(--dsw-alias-label-tertiary,inherit)}
 .aps-row-note b{font-weight:500;color:var(--dsw-alias-label-secondary,inherit)}
 .aps-row-control{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:6px;justify-content:flex-end}
 .aps-row-control [role="radiogroup"]{justify-content:flex-end}
@@ -81,8 +89,10 @@ const CSS = `
 .aps-field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .aps-field-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .aps-label{font-weight:500;display:flex;align-items:center;gap:6px}
-.aps-hint{font-size:${SIZE(12)};line-height:1.5;color:var(--dsw-alias-label-tertiary,inherit)}
-.aps-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));column-gap:16px;width:100%}
+.aps-hint{margin:0;font-size:${SIZE(12)};line-height:1.5;color:var(--dsw-alias-label-tertiary,inherit)}
+/* The档位 grid wraps to two rows at a normal width. With only a column gap the
+   second row's label sat on top of the first row's input. */
+.aps-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));column-gap:16px;row-gap:10px;width:100%}
 .aps-filter{max-width:220px}
 
 /* --------------------------------------------------- a number with its unit */
@@ -102,9 +112,9 @@ const CSS = `
 /* A note is a sentence, not a box. Only the tones that can block a save —
    warning and danger — get a fill, so a coloured rectangle always means
    "this needs a decision". */
-.aps-note{display:flex;gap:8px;align-items:flex-start;font-size:${SIZE(12)};line-height:1.5;color:var(--dsw-alias-label-tertiary,inherit);padding:6px 0}
+.aps-note{display:flex;gap:8px;align-items:flex-start;margin:0;font-size:${SIZE(12)};line-height:1.5;color:var(--dsw-alias-label-tertiary,inherit);padding:2px 0}
 .aps-note b{font-weight:500;color:var(--dsw-alias-label-secondary,inherit)}
-.aps-notice{display:flex;gap:8px;padding:8px 10px;border-radius:8px;font-size:${SIZE(12)};line-height:1.5;align-items:flex-start}
+.aps-notice{display:flex;gap:8px;margin:4px 0;padding:8px 10px;border-radius:8px;font-size:${SIZE(12)};line-height:1.5;align-items:flex-start}
 .aps-notice-info{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.06));color:var(--dsw-alias-label-secondary,inherit)}
 .aps-notice-warning{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#d97706) 12%,transparent);color:var(--dsw-alias-state-warn-primary,#d97706)}
 .aps-notice-danger{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 12%,transparent);color:var(--dsw-alias-state-error-primary,#e5484d)}
@@ -123,7 +133,7 @@ const CSS = `
 .aps-curve-value{text-align:right;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,inherit)}
 
 /* --------------------------------------------------------- cluster headings */
-.aps-group-head{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:8px;border-top:0.5px solid var(--dsw-alias-border-l2,rgba(128,128,128,.18))}
+.aps-group-head{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:2px;padding-top:10px;border-top:0.5px solid var(--dsw-alias-border-l2,rgba(128,128,128,.18))}
 .aps-group-title{font-weight:600;font-size:${SIZE(12)};color:var(--dsw-alias-label-secondary,inherit)}
 .aps-group-count{font-size:${SIZE(11)};color:var(--dsw-alias-label-tertiary,inherit);font-variant-numeric:tabular-nums}
 .aps-group-note{font-size:${SIZE(11)};color:var(--dsw-alias-label-tertiary,inherit);flex:1;min-width:0}
@@ -133,8 +143,8 @@ const CSS = `
 /* ----------------------------------------------------------- header editor */
 /* Same hairline rhythm as a card's rows: the inputs are the content, so the row
    only has to keep them lined up and separated. */
-.aps-header-table{display:flex;flex-direction:column;margin:0 -10px}
-.aps-header-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:7px 10px;border-top:0.5px solid var(--dsw-alias-border-l1,rgba(128,128,128,.1))}
+.aps-header-table{display:flex;flex-direction:column}
+.aps-header-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:0.5px solid var(--dsw-alias-border-l1,rgba(128,128,128,.1))}
 .aps-header-row:first-child{border-top:none}
 .aps-header-name{width:34%;min-width:110px}
 .aps-header-value{flex:1;min-width:0}
@@ -152,7 +162,7 @@ const CSS = `
 .aps-preview-line{display:flex;gap:8px;align-items:baseline}
 .aps-preview-key{color:var(--dsw-alias-label-tertiary,inherit);min-width:132px}
 .aps-preview-value{font-family:ui-monospace,Consolas,monospace;word-break:break-all}
-.aps-toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 0}
+.aps-toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:10px 0 0}
 .aps-spacer{flex:1}
 /* ------------------------------------------------------- per-model editor */
 .aps-model-picker{display:flex;flex-direction:column;gap:8px;padding:2px 0 10px}
@@ -171,7 +181,7 @@ const CSS = `
 .aps-diag-key{min-width:160px;color:var(--dsw-alias-label-tertiary,inherit)}
 .aps-diag-detail{color:var(--dsw-alias-label-dimmed,#8a8a8a);font-family:ui-monospace,Consolas,monospace;font-size:${SIZE(11)};word-break:break-all}
 .aps-tag-list{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
-.aps-sticky-actions{display:flex;gap:8px;align-items:center;padding:10px 0 2px;border-top:0.5px solid var(--dsw-alias-border-l2,rgba(128,128,128,.2))}
+.aps-sticky-actions{display:flex;gap:8px;align-items:center;padding:12px 0 0;border-top:0.5px solid var(--dsw-alias-border-l2,rgba(128,128,128,.2))}
 .aps-visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 `
 

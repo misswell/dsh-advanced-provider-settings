@@ -5,6 +5,40 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] — 2026-09-21
+
+### Fixed
+
+**The panel now has a measurable spacing system instead of an eyeballed one.** Every gap was rendered
+headlessly and read off computed geometry, which exposed three defects no amount of reading markup
+would have:
+
+- **Section descriptions sat directly on top of their content.** `Note` and the card description
+  carried an inline `style={{ margin: 0 }}`, so no stylesheet margin could ever apply to them — the
+  distance from "what this section is for" to the first control was 0px on every card in the panel.
+  The inline overrides are gone; the gap is now 8px.
+- **The thinking-level grid had no row gap.** Seven fields in an auto-fit grid wrap to two rows at any
+  normal width, and the second row's labels (`高`, `极高`, `最大`) were printed over the first row's
+  inputs.
+- **Filled notice boxes touched whatever surrounded them.** A warning or danger callout is the one
+  block in a card that has its own background, and it needs air to read as a block rather than as a
+  band across the card.
+
+### Changed
+
+- **One inset per card.** Rows previously pulled themselves 10px out of the card body with a negative
+  margin, so a row's hairline — and an empty state's text — landed 10px left of the column every other
+  line in the same card was aligned to. The card body owns the padding now and nothing fights it; the
+  overridden-row accent bar moved into the 8px gutter that leaves, so a marked row's label still lines
+  up with its unmarked neighbours. Measured left edges are now 13 / 26 / 37px for the three nesting
+  levels, previously a mix of 2px and 12px.
+- **The two disclosure levels are now distinguishable without reading them.** A provider's section
+  cards sit 8px apart inside a 34px-tall header; the plugin's own top-level cards sit 14px apart inside
+  a 40px-tall one. Both levels carry the same title-plus-chip shape, so size and rhythm are what say
+  which level you are on.
+- **Lint no longer runs over local scratch.** `.tmp/` was already gitignored, and `eslint .` walked
+  into the throwaway preview harness there and failed the gate on it.
+
 ## [0.2.0] — 2026-09-21
 
 ### Added
@@ -211,5 +245,6 @@ active, and offers to import its global header mapping without overwriting heade
 - Not supported on DeepSeek Harness `0.1.4` or earlier: the extension seat and the client-side
   settings mutation API this plugin depends on do not exist there.
 
+[0.2.1]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.2.1
 [0.2.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.2.0
 [0.1.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.1.0

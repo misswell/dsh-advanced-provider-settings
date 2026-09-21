@@ -10,7 +10,7 @@ Settings** 控制面板。面板以**模型**为主角：先选一个模型，�
 自己的、带版本号的 settings 传输通道，因此你的 YAML 会保留注释，而每一个你没有动过的字段都会
 原样保留。
 
-> **状态：**`v0.2.0`，已在 DeepSeek Harness `0.1.5-rc.2` 上验证。
+> **状态：**`v0.2.1`，已在 DeepSeek Harness `0.1.5-rc.2` 上验证。
 
 ---
 
@@ -66,7 +66,7 @@ DeepSeek Harness 的 Provider schema 设计得相当完整，但「模型」页�
 
 ```bash
 # 从 GitHub Release 的 tgz 安装
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.2.0/dsh-advanced-provider-settings-0.2.0.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.2.1/dsh-advanced-provider-settings-0.2.1.tgz
 
 # 发布到 npm 后
 dsh plugin --profile web add dsh-advanced-provider-settings

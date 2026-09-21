@@ -11,7 +11,7 @@ flags — sits in provider-level cards that each say why they are not on the mod
 written through DeepSeek Harness's own revision-fenced settings transport, so your YAML keeps its
 comments and every field you never touched stays exactly as it was.
 
-> **Status:** `v0.2.0`. Verified against DeepSeek Harness `0.1.5-rc.2`.
+> **Status:** `v0.2.1`. Verified against DeepSeek Harness `0.1.5-rc.2`.
 
 ---
 
@@ -74,7 +74,7 @@ Requires DeepSeek Harness `0.1.5-rc.2` or a compatible build, and Node.js 20+.
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 
 # From a GitHub release tarball (a fixed, content-hashed artifact)
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.2.0/dsh-advanced-provider-settings-0.2.0.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.2.1/dsh-advanced-provider-settings-0.2.1.tgz
 
 # From npm, once published
 dsh plugin --profile web add dsh-advanced-provider-settings

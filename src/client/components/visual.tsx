@@ -95,7 +95,7 @@ export function BackoffCurve(props: {
 }): ReactNode {
   const factor = props.factor ?? 2
   if (!Number.isFinite(props.retries) || props.retries < 1 || props.initialMs <= 0) {
-    return <p className={cls.rowNote} style={{ margin: 0 }}>{props.t('retry.curveEmpty')}</p>
+    return <p className={cls.rowNote}>{props.t('retry.curveEmpty')}</p>
   }
 
   const waits: number[] = []

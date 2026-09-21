@@ -47,7 +47,7 @@ export function Notice(props: {
 
 /** One line of explanation, without the box. */
 export function Note(props: { children: ReactNode }): ReactNode {
-  return <p className={cls.note} style={{ margin: 0 }}>{props.children}</p>
+  return <p className={cls.note}>{props.children}</p>
 }
 
 /**
@@ -270,7 +270,7 @@ export function SectionShell(props: {
       {props.open ? (
         <div className={cls.cardBody} id={`${props.id}-body`}>
           {props.description === undefined ? null : (
-            <p className={cls.cardDesc} style={{ margin: 0 }}>{props.description}</p>
+            <p className={cls.cardDesc}>{props.description}</p>
           )}
           {props.children}
         </div>

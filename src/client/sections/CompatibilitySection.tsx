@@ -140,7 +140,7 @@ export function CompatFieldGrid(props: {
         />
       ) : null}
       {groups.length === 0 ? (
-        <p className={cls.hint} style={{ margin: 0 }}>{t('compat.noneMatch')}</p>
+        <p className={cls.hint}>{t('compat.noneMatch')}</p>
       ) : null}
       {groups.map((entry) => (
         <div className={cls.flagGroup} key={entry.group}>

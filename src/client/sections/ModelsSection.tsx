@@ -85,7 +85,7 @@ export function ModelsSection(props: {
         ) : null}
         <div className={cls.pickerList} role="radiogroup" aria-label={t('models.pick')}>
           {visible.length === 0 ? (
-            <p className={cls.hint} style={{ margin: 0 }}>{t('models.noneMatch')}</p>
+            <p className={cls.hint}>{t('models.noneMatch')}</p>
           ) : null}
           {visible.map(({ model, index }) => {
             const overrides = overrideCountOf(model)
