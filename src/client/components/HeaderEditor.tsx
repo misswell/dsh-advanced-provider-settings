@@ -11,7 +11,7 @@ import { Button, Input, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { isReservedHeader, USER_AGENT_PRESETS } from '../../shared/capabilities.js'
 import { isSensitiveHeader, validateHeader, type HeaderEntry } from '../../shared/headers.js'
 import { cls } from '../styles.js'
-import { Field, LinkButton, Notice } from './primitives.js'
+import { LinkButton, Notice, Row } from './primitives.js'
 import type { Translate } from '../contract.js'
 
 /** Which layer is being edited; drives the advisory copy. */
@@ -142,7 +142,7 @@ export function HeaderEditor(props: {
                 />
               </div>
               {issue.name === undefined && issue.value === undefined ? null : (
-                <span className={cls.error} role="alert">{issue.name ?? issue.value}</span>
+                <span className={`${cls.error} ${cls.headerIssue}`} role="alert">{issue.name ?? issue.value}</span>
               )}
             </div>
           )
@@ -172,7 +172,7 @@ export function HeaderEditor(props: {
       ) : null}
 
       {props.showPresets === true ? (
-        <Field label={t('headers.presets')} hint={t('headers.presetsDesc')}>
+        <Row label={t('headers.presets')} note={t('headers.presetsDesc')} wide>
           <div className={cls.tagList}>
             {USER_AGENT_PRESETS.map((preset) => (
               <Button
@@ -187,7 +187,7 @@ export function HeaderEditor(props: {
               </Button>
             ))}
           </div>
-        </Field>
+        </Row>
       ) : null}
     </div>
   )

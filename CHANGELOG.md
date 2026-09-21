@@ -5,14 +5,64 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] — 2026-09-21
+
+### Added
+
+**Per-provider settings are now editable on the plugin's own settings page.** The page used to print
+one read-only line per provider and send you to the Models page for the controls, which made the
+destination look like a status screen. It now lists the configured providers as a choice row and
+mounts the full editor — headers, retry, network, vision, reasoning, compatibility, models, effective
+configuration — for the selected one. Both surfaces write through the same revision-fenced scope, so
+the card on the Models page and this page are two views of one configuration, not two copies.
+
+- Switching providers while the editor holds unsaved edits is refused, with the reason stated: the
+  draft belongs to one provider and switching would otherwise drop it silently.
 
 ### Changed
 
+**The model, not the provider, is the primary unit of configuration.** A panel that only showed
+provider-wide cards made every model on a route look equally configured — but "can *this* model take
+images?" is the question people arrive with, and the answer differs per model. *Models* is now
+*Per model*: a one-at-a-time master-detail editor, mounted first in the panel, so the model list is
+where configuration starts rather than one more form at the bottom.
+
+- **Both disclosure levels start folded.** The three cards on the settings page and every section
+  inside the editor open closed, including *Per model*. A card header already carries the chip that
+  says what is configured there (`2 items`, `Always retrying`, `Custom`), so the page reads as an
+  index of answers and you expand only the one you came for. Opening every section that held an
+  override — which is what a configured provider does — turned the page into a wall of forms.
+- **A row of model pills selects the model.** An `IMG` / `图` mark shows a model that declares image
+  input, a dot shows one that already carries overrides (with the count in the tooltip), and a filter
+  box appears past eight models so a long catalog stays usable. The editor header states the model id
+  it is editing and offers *Clear every override on this model*, and the model list is never reordered
+  or renamed — entries are addressed by index.
+- **The editor shows exactly the fields a model entry accepts.** Harness's schema permits `input`,
+  `reasoningEfforts` and `compat` on a model, and strict validation **rejects a settings write that
+  puts anything else there**. So there are no per-model retry, header, network, image-budget or
+  cache controls to hunt for; the editor states that boundary in prose instead of shipping buttons
+  that would fail on save.
+- **An inherited model-level flag names what it inherits.** Each un-overridden `compat` flag in the
+  model editor now reads `Inherited from the route: Supported` / `当前沿用路由级：支持`, so comparing a
+  model against its provider no longer means switching sections and holding the value in memory.
+- **Every provider-wide card says so in its own description** — headers, retry, network, vision and
+  reasoning each state that the value applies to all models on the route, and vision and reasoning
+  point at *Per model* for the part that is per-model.
+- **The override bar stopped lying.** A choice row whose value was the `inherit` sentinel painted the
+  accent bar as if you had set it; the bar is the one mark that claims "this is yours", so `ChoiceRow`
+  now takes the fact explicitly.
+- Alongside this, 24 dictionary keys left over from the previous nested-accordion layout were removed
+  from both locales.
+
 **The configuration surface is visual rather than a form.** A field that showed `supportsStore` as
 its label, or `300000` in a box with no unit, tells you what a value is but not what it does. Every
-control now answers one of the questions a form leaves open.
+control now answers one of the questions a form leaves open — and answers it once, not five times.
 
+- **One row, one setting.** Each section is a card whose head carries the title, a status badge and
+  one line describing what the card edits. Below it, hairline-separated rows each hold a label, at
+  most one line of explanation, and exactly one control. A value that used to appear as a slider
+  overlay, a range input, a text box, a human-readable echo, a "default is X" caption, a reset button
+  and a status dot now appears as the number, its unit, and one sentence.
 - **Every identifier is named and explained.** All 26 `compat` flags, the seven thinking levels, the
   four transports, the three cache-retention tiers and the compat enum options have real labels and
   a one-line description in both locales (about 145 new keys per dictionary). The wire identifier is
@@ -20,36 +70,56 @@ control now answers one of the questions a form leaves open.
 - **Compat flags are grouped by what they change** — request fields, streaming, reasoning, tool
   calls, caching — with a per-group count of how many members are overridden, and a filter that
   appears once the list is long enough to need one. Tri-state is preserved: `Inherit` is not `Off`.
-- **Durations and byte budgets became sliders** with the legal range, a tick showing where the
-  inherited default sits, and unit-aware rendering — `5 min`, `10 MiB` — so a value that is off by a
-  factor of 1000 is visible rather than plausible. `Reset to inherited` removes the override instead
-  of pinning today's number. Retry delays keep a plain input — a policy's delays are always concrete
-  once it exists, so inherit/reset would be a lie there — but now state their duration in words
-  beside the millisecond count.
-- **A dot and a word per field** state whether the value is yours or inherited, replacing the
-  previous `OverrideTag`, so a column of them can be scanned vertically.
+- **A number carries its unit inside its box**, and the inherited default is the placeholder rather
+  than a third widget. An inherit button appears only on a row that actually overrides something, and
+  it removes the override instead of pinning today's number.
+- **Durations and byte budgets are said out loud** — `2 分钟`, `10 MiB` — so a value that is wrong by
+  a factor of 1000 stops looking plausible. The pixel budget is the one row that restates its value,
+  because converting it to `≈ 1448 × 1448 像素` says something the box cannot.
+- **An accent bar on the row's left edge is the only per-field status mark.** A dot plus a word for
+  "overridden" repeated on most rows and left nothing for a real warning to distinguish itself from.
+- **Pills are the single selection vocabulary** — transport, cache tier, thinking level, retry mode
+  and retry preset — so one kind of choice is never rendered three ways.
+- **A coloured box now always means a decision is needed.** Explanatory prose is plain text; only
+  warnings, blocking errors and action results get a fill.
 - **The retry policy is drawn** as a backoff curve: one bar per attempt, sized by the real delay,
   with the total wait.
-- **The effort ladder** shows the five thinking levels that reach the wire and says explicitly that
-  `xhigh` and `max` are folded to `high`.
-- **The panel opens on what you changed** (headers plus every section carrying an override) instead
-  of on eight collapsed rows, so returning to a field does not mean hunting for it.
+- **Every card header states what is inside it**, through a status chip rather than a body of text —
+  the rule the default-collapsed panel above now depends on.
+- **The panel is themed by the shell, not by itself.** Every colour resolves to a `--dsw-alias-*`
+  token and every size is derived from `--dsh-content-font-delta`, so it follows the host's theme and
+  the user's Settings font size instead of painting on hardcoded fallbacks.
 
 ### Fixed
 
+- **A per-model `compat` override was silently dropped on save.** The model editor wrote
+  `models.<i>.compat` into the draft, painted the row's accent bar and counted it among the model's
+  overrides — but the managed-key table the diff is taken from (`MANAGED_MODEL_KEYS`) listed only
+  `input` and `reasoningEfforts`, so no operation was ever emitted for it. The edit looked applied
+  until the panel reloaded, when it disappeared — and *Reset all advanced settings* could not clear a
+  key it never wrote either. `compat` is now in that table, the section badge and the editor's override count
+  both derive from it rather than restating it, and a test asserts the whole-config diff a save uses
+  round-trips a model-level `compat` value.
+- **The effective-configuration preview printed its own dictionary keys.** `cacheRetention`, the
+  three timeouts, `defaultInput` and every `compat.*` line rendered literally as
+  `preview.key.compat.supportsStore`, because those keys were never in either dictionary. Each preview
+  line now names itself, compat lines reuse the flag's own label rather than a second copy of it, and
+  a render test fails if any requested key is missing from the shipped dictionary.
+- **"Open Models" was a label, not a button.** The page ended with a field carrying that label and
+  two namespace chips under it; nothing was clickable, so it advertised an action it could not
+  perform. Removed — the two namespaces it printed are already reported by the diagnostics probes.
 - **A wide enum control squeezed its own label into a vertical ribbon.** On `thinkingFormat`, whose
   13 options are the widest control in the panel, the rigid two-column flag row left the label one
   character wide. Flag rows now wrap, and the group's control moves below the text when it does not
   fit.
 - **`chatTemplateKwargs` and `chatTemplateArgs` were unusable.** Both are `dict` fields and fell
   through to the enum branch, which has no options for them, so an already-set value rendered as
-  `[object Object]` and could not be edited. They now accept JSON, and a half-typed object is
-  discarded rather than written.
+  `[object Object]` and could not be edited. They now accept JSON in a box that spans the row, and a
+  half-typed object is discarded rather than written.
 - **`formatBytes` is reachable and consistent with the Vision section.** It quotes KiB/MiB/GiB to
-  match the schema's powers of two, and byte fields now echo their magnitude instead of showing a
-  bare count.
+  match the schema's powers of two.
 
-## [0.1.0] — 2025-09-17
+## [0.1.0] — 2026-09-17
 
 First release. Verified against DeepSeek Harness `0.1.5-rc.2`.
 
@@ -141,5 +211,5 @@ active, and offers to import its global header mapping without overwriting heade
 - Not supported on DeepSeek Harness `0.1.4` or earlier: the extension seat and the client-side
   settings mutation API this plugin depends on do not exist there.
 
-[Unreleased]: https://github.com/misswell/dsh-advanced-provider-settings/compare/v0.1.0...HEAD
+[0.2.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.2.0
 [0.1.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.1.0

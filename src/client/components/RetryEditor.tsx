@@ -16,17 +16,16 @@
  * from "retry five times".
  */
 import { useState, type ReactNode } from 'react'
-import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Input, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   DEFAULT_RETRYABLE_CODES,
-  MAX_TIMER_DELAY_MS,
   RETRY_DEFAULTS,
   RETRY_PRESETS,
   matchRetryPreset,
   type RetryPresetId,
 } from '../../shared/retry.js'
 import { cls } from '../styles.js'
-import { Notice, NumberField, Field, Toolbar } from './primitives.js'
+import { Note, Notice, NumberBox, Row } from './primitives.js'
 import { BackoffCurve, formatDuration } from './visual.js'
 import type { Translate } from '../contract.js'
 import type { RetryEditorState } from '../../shared/retry.js'
@@ -119,66 +118,65 @@ export function RetryEditor(props: {
   }
 
   const alwaysNeedsAck = state?.mode === 'always' && !props.acknowledged && !alerted
-
   const codesError = props.issues.get('retryableCodes') ?? props.issues.get('retryPolicy.retryableCodes')
+  const delayIssue = (key: 'initialDelayMs' | 'maxDelayMs'): string | undefined =>
+    props.issues.get(`retryPolicy.backoff.${key}`) ?? props.issues.get(`backoff.${key}`)
 
   return (
     <div className={cls.section}>
-      <p className={cls.hint} style={{ margin: 0 }}>{t('retry.desc')}</p>
-
-      <Field label={t('retry.preset')}>
-        <div className={cls.presetList} role="radiogroup" aria-label={t('retry.preset')}>
-          {(['harness-default', 'conservative', 'aggressive', 'custom'] as const).map((id) => {
-            const copy = PRESET_COPY[id]
-            // "Custom" is a state, not a choice: it appears only once the values
-            // stop matching a preset, so it is not clickable.
-            const selectable = id !== 'custom'
-            return (
-              <label
-                key={id}
-                className={cls.preset}
-                data-active={id === activePreset}
-                style={{ cursor: selectable && !disabled ? 'pointer' : 'default', opacity: selectable ? 1 : 0.7 }}
-              >
-                <input
-                  type="radio"
-                  name="aps-retry-preset"
-                  checked={id === activePreset}
-                  disabled={disabled || !selectable}
-                  onChange={() => { choosePreset(id) }}
-                />
-                <span className={cls.presetBody}>
-                  <span className={cls.presetTitle}>{t(copy.title)}</span>
-                  <span className={cls.hint}>{t(copy.desc)}</span>
-                </span>
-              </label>
-            )
-          })}
+      <Row
+        label={t('retry.preset')}
+        note={t(PRESET_COPY[activePreset].desc)}
+        wide
+      >
+        <div className={cls.tagList} role="radiogroup" aria-label={t('retry.preset')}>
+          {RETRY_PRESETS.map((preset) => (
+            <Pill
+              key={preset.id}
+              role="radio"
+              aria-checked={preset.id === activePreset}
+              active={preset.id === activePreset}
+              disabled={disabled}
+              title={t(PRESET_COPY[preset.id].desc)}
+              onClick={() => { choosePreset(preset.id) }}
+            >
+              {t(PRESET_COPY[preset.id].title)}
+            </Pill>
+          ))}
+          {/* "Custom" is a state rather than a choice: it appears only once the
+              values stop matching a preset, so it is shown and not clickable. */}
+          {activePreset === 'custom' ? (
+            <Pill active role="radio" aria-checked>{t(PRESET_COPY.custom.title)}</Pill>
+          ) : null}
         </div>
-      </Field>
+      </Row>
 
       {state === null ? null : (
         <>
-          <Field label={t('retry.mode')} hint={state.mode === 'always' ? t('retry.mode.alwaysDesc') : t('retry.mode.normalDesc')}>
+          <Row
+            label={t('retry.mode')}
+            note={state.mode === 'always' ? t('retry.mode.alwaysDesc') : t('retry.mode.normalDesc')}
+            error={props.issues.get('mode')}
+            overridden
+          >
             <div className={cls.tagList} role="radiogroup" aria-label={t('retry.mode')}>
-              <Button
-                variant={state.mode === 'normal' ? 'primary' : 'outline'}
-                size="sm"
-                disabled={disabled}
-                onClick={() => { onChange({ ...state, mode: 'normal' }) }}
-              >
-                {t('retry.mode.normal')}
-              </Button>
-              <Button
-                variant={state.mode === 'always' ? 'primary' : 'outline'}
-                size="sm"
-                disabled={disabled}
-                onClick={() => { onChange({ ...state, mode: 'always' }); setAlerted(true) }}
-              >
-                {t('retry.mode.always')}
-              </Button>
+              {(['normal', 'always'] as const).map((mode) => (
+                <Pill
+                  key={mode}
+                  role="radio"
+                  aria-checked={state.mode === mode}
+                  active={state.mode === mode}
+                  disabled={disabled}
+                  onClick={() => {
+                    onChange({ ...state, mode })
+                    if (mode === 'always') setAlerted(true)
+                  }}
+                >
+                  {t(`retry.mode.${mode}`)}
+                </Pill>
+              ))}
             </div>
-          </Field>
+          </Row>
 
           {alwaysNeedsAck ? (
             <Notice tone="danger" title={t('retry.alwaysTitle')}>
@@ -196,27 +194,31 @@ export function RetryEditor(props: {
           ) : null}
 
           {state.mode === 'normal' ? (
-            <div className={cls.grid}>
-              <NumberField
-                id="aps-retry-max"
+            <>
+              <Row
                 label={t('retry.maxRetries')}
-                hint={t('retry.maxRetriesDesc')}
-                value={state.maxRetries}
-                min={0}
-                placeholder="5"
-                disabled={disabled}
-                onChange={(next) => { onChange({ ...state, maxRetries: next ?? 0 }) }}
-              />
-              <Field label={t('retry.retryableCodes')} hint={t('retry.retryableCodesDesc')} error={codesError}>
-                <input
+                note={t('retry.maxRetriesDesc')}
+                error={props.issues.get('maxRetries')}
+                overridden
+              >
+                <NumberBox
+                  value={state.maxRetries}
+                  placeholder={String(RETRY_DEFAULTS.maxRetries)}
+                  ariaLabel={t('retry.maxRetries')}
+                  disabled={disabled}
+                  onChange={(next) => { onChange({ ...state, maxRetries: next ?? 0 }) }}
+                />
+              </Row>
+
+              <Row
+                label={t('retry.retryableCodes')}
+                note={t('retry.retryableCodesDesc')}
+                error={codesError}
+                overridden
+                wide
+              >
+                <Input
                   className={`${cls.mono} ${cls.input}`}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid var(--dsw-border-1,rgba(128,128,128,.35))',
-                    borderRadius: 6,
-                    padding: '5px 8px',
-                    color: 'inherit',
-                  }}
                   value={state.retryableCodes.join(', ')}
                   disabled={disabled}
                   spellCheck={false}
@@ -229,51 +231,56 @@ export function RetryEditor(props: {
                     onChange({ ...state, retryableCodes: codes })
                   }}
                 />
-              </Field>
-            </div>
-          ) : (
-            <Notice tone="info">{t('retry.notPerModel')}</Notice>
-          )}
+              </Row>
+            </>
+          ) : null}
 
-          <div className={cls.grid}>
-            <NumberField
-              id="aps-retry-initial"
-              label={t('retry.initialDelayMs')}
-              hint={formatDuration(state.initialDelayMs, t)}
+          <Row
+            label={t('retry.initialDelayMs')}
+            note={delayNote(t, state.initialDelayMs, RETRY_DEFAULTS.initialDelayMs)}
+            error={delayIssue('initialDelayMs')}
+            overridden
+          >
+            <NumberBox
               value={state.initialDelayMs}
-              min={1}
-              max={MAX_TIMER_DELAY_MS}
-              placeholder="500"
+              placeholder={String(RETRY_DEFAULTS.initialDelayMs)}
+              unit="ms"
+              ariaLabel={t('retry.initialDelayMs')}
               disabled={disabled}
-              error={props.issues.get('retryPolicy.backoff.initialDelayMs') ?? props.issues.get('backoff.initialDelayMs')}
               onChange={(next) => { onChange({ ...state, initialDelayMs: next ?? 1 }) }}
             />
-            <NumberField
-              id="aps-retry-maxdelay"
-              label={t('retry.maxDelayMs')}
-              hint={formatDuration(state.maxDelayMs, t)}
+          </Row>
+
+          <Row
+            label={t('retry.maxDelayMs')}
+            note={delayNote(t, state.maxDelayMs, RETRY_DEFAULTS.maxDelayMs)}
+            error={delayIssue('maxDelayMs')}
+            overridden
+          >
+            <NumberBox
               value={state.maxDelayMs}
-              min={1}
-              max={MAX_TIMER_DELAY_MS}
-              placeholder="10000"
+              placeholder={String(RETRY_DEFAULTS.maxDelayMs)}
+              unit="ms"
+              ariaLabel={t('retry.maxDelayMs')}
               disabled={disabled}
-              error={props.issues.get('retryPolicy.backoff.maxDelayMs') ?? props.issues.get('backoff.maxDelayMs')}
               onChange={(next) => { onChange({ ...state, maxDelayMs: next ?? 1 }) }}
             />
-            <NumberField
-              id="aps-retry-jitter"
-              label={t('retry.jitterRatio')}
-              hint={t('retry.jitterRatioDesc')}
+          </Row>
+
+          <Row
+            label={t('retry.jitterRatio')}
+            note={t('retry.jitterRatioDesc')}
+            error={props.issues.get('retryPolicy.backoff.jitterRatio') ?? props.issues.get('backoff.jitterRatio')}
+            overridden
+          >
+            <NumberBox
               value={state.jitterRatio}
-              min={0}
-              max={1}
-              placeholder="0.1"
-              narrow
+              placeholder={String(RETRY_DEFAULTS.jitterRatio)}
+              ariaLabel={t('retry.jitterRatio')}
               disabled={disabled}
-              error={props.issues.get('retryPolicy.backoff.jitterRatio') ?? props.issues.get('backoff.jitterRatio')}
               onChange={(next) => { onChange({ ...state, jitterRatio: next ?? 0 }) }}
             />
-          </div>
+          </Row>
 
           {/* `always` retries until the route succeeds, so there is no finite
               curve to draw; the schema also drops maxRetries in that mode. */}
@@ -286,17 +293,20 @@ export function RetryEditor(props: {
             />
           ) : null}
 
-          <Toolbar>
-            <Tag tone={state.mode === 'always' ? 'warning' : 'neutral'}>
-              {state.mode === 'always' ? t('status.always') : t('status.retries', { count: state.maxRetries })}
-            </Tag>
-            <span className={cls.spacer} />
-            <span className={cls.hint}>{t('retry.notPerModel')}</span>
-          </Toolbar>
+          {/* Resetting the policy is the "Harness 默认" preset above, so there is
+              no second inherit control here — only the reason there is no
+              per-model retry to configure. */}
+          <Note>{t('retry.notPerModel')}</Note>
         </>
       )}
     </div>
   )
+}
+
+/** One delay row's note: what it means out loud, and the default it differs from. */
+function delayNote(t: Translate, value: number, fallback: number): string {
+  const human = formatDuration(value, t)
+  return value === fallback ? human : `${human} · ${t('field.defaultIs', { value: formatDuration(fallback, t) })}`
 }
 
 /** Translate a shared-validator issue into a message using the retry copy table. */

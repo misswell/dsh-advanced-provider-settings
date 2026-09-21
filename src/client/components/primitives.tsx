@@ -1,19 +1,29 @@
 /**
- * Small shared building blocks for the settings surface.
+ * Shared building blocks for the settings surface.
  *
  * Every control here is a thin wrapper over a `@deepseek-ai/dsh-client-ui-primitives`
  * component, so this plugin inherits the shell's focus, disabled and theming
  * behaviour instead of reimplementing it.
+ *
+ * The layout rule the whole file follows: one row is one setting. The row carries
+ * a label, at most one line of explanation, and exactly one control — so a value
+ * is never shown twice and a section reads top-to-bottom as a list of decisions
+ * rather than a stack of widgets.
  */
 import type { ReactNode } from 'react'
-import { Button, Input, Pill, Switch, Tag, type TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Pill, Tag, type TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
 import { cls } from '../styles.js'
-import type { Translate } from '../contract.js'
 
 /** Tone of an inline notice. */
 export type NoticeTone = 'info' | 'warning' | 'danger' | 'success'
 
-/** Inline explanatory block. */
+/**
+ * Inline explanatory block.
+ *
+ * Reserved for the cases that need a box: a warning the user must act on, a
+ * danger that blocks saving, or the result of an action. Everything quieter is a
+ * {@link Note}, because a column of coloured rectangles has no hierarchy left.
+ */
 export function Notice(props: {
   tone: NoticeTone
   title?: string
@@ -31,6 +41,54 @@ export function Notice(props: {
         {props.title === undefined ? null : <strong>{props.title}</strong>}
         {props.children}
       </div>
+    </div>
+  )
+}
+
+/** One line of explanation, without the box. */
+export function Note(props: { children: ReactNode }): ReactNode {
+  return <p className={cls.note} style={{ margin: 0 }}>{props.children}</p>
+}
+
+/**
+ * One setting: label and explanation on the left, one control on the right.
+ *
+ * `overridden` is the only status mark a row carries — an accent bar on its left
+ * edge. A word for it ("已覆盖") would repeat on most rows and say nothing a
+ * glance at the bar does not.
+ */
+export function Row(props: {
+  label: string
+  /** The raw schema identifier, for matching against provider documentation. */
+  fieldKey?: string
+  /** One line: what the setting does, and what it currently means. */
+  note?: ReactNode
+  error?: ReactNode
+  /** Whether this row's value is set here rather than inherited. */
+  overridden?: boolean
+  /** Put the control on its own line under the label, for wide option lists. */
+  wide?: boolean
+  children: ReactNode
+}): ReactNode {
+  // A row that is only a label has nothing to stack under it, so the label sits
+  // level with the control instead of hanging at the top of the line.
+  const plain = props.note === undefined && props.error === undefined && props.fieldKey === undefined
+  return (
+    <div
+      className={cls.row}
+      data-overridden={props.overridden === true ? 'true' : undefined}
+      data-wide={props.wide === true ? 'true' : undefined}
+      data-plain={plain ? 'true' : undefined}
+    >
+      <div className={cls.rowText}>
+        <span className={cls.rowLabel}>
+          <span>{props.label}</span>
+          {props.fieldKey === undefined ? null : <code className={cls.rowKey}>{props.fieldKey}</code>}
+        </span>
+        {props.note === undefined ? null : <span className={cls.rowNote}>{props.note}</span>}
+        {props.error === undefined ? null : <span className={cls.error} role="alert">{props.error}</span>}
+      </div>
+      <div className={cls.rowControl}>{props.children}</div>
     </div>
   )
 }
@@ -57,63 +115,59 @@ export function Field(props: {
   )
 }
 
-/** A tag marking a field as explicitly overridden rather than inherited. */
-export function OverrideTag({ t, overridden }: { t: Translate; overridden: boolean }): ReactNode {
-  if (!overridden) return null
-  return <Tag tone="info">{t('status.custom')}</Tag>
-}
-
 /**
- * Numeric field where empty means "inherit".
+ * A number with its unit inside the box, so the value needs no second echo.
  *
- * Kept as text rather than a number input so a partially typed value (a lone
- * minus sign, an empty box) does not get coerced into a write.
+ * Empty means "inherit", which is why the default is the placeholder: the box
+ * then says both what is set and what would be used otherwise, without a third
+ * line of prose.
  */
-export function NumberField(props: {
-  id: string
-  label: string
-  hint?: string | undefined
-  error?: string | undefined
+export function NumberBox(props: {
   value: number | undefined
   placeholder?: string | undefined
-  min?: number | undefined
-  max?: number | undefined
-  step?: number | undefined
-  narrow?: boolean
+  /** A unit label, or a control (a unit picker) to sit inside the box. */
+  unit?: ReactNode
+  ariaLabel: string
   disabled?: boolean | undefined
-  accessory?: ReactNode
+  /** Rejects a typed value that cannot be committed (a half-written object). */
+  parse?: ((raw: string) => number | undefined) | undefined
   onChange: (next: number | undefined) => void
 }): ReactNode {
-  const text = props.value === undefined ? '' : String(props.value)
+  const { value, placeholder, unit, ariaLabel, disabled, parse, onChange } = props
   return (
-    <Field
-      label={props.label}
-      hint={props.hint}
-      error={props.error}
-      accessory={props.accessory}
-    >
-      <Input
-        id={props.id}
-        className={`${cls.mono} ${props.narrow === true ? cls.inputNarrow : cls.input}`}
+    <span className={cls.num}>
+      <input
+        className={cls.numInput}
         type="text"
         inputMode="numeric"
-        value={text}
-        placeholder={props.placeholder}
-        aria-label={props.label}
-        disabled={props.disabled}
+        value={value === undefined ? '' : String(value)}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        spellCheck={false}
+        autoComplete="off"
         onChange={(event) => {
           const raw = event.currentTarget.value.trim()
           if (raw === '') {
-            props.onChange(undefined)
+            onChange(undefined)
+            return
+          }
+          if (parse !== undefined) {
+            const parsed = parse(raw)
+            if (parsed !== undefined) onChange(parsed)
             return
           }
           if (!/^-?\d+(\.\d+)?$/.test(raw)) return
           const parsed = Number(raw)
-          if (!Number.isFinite(parsed)) return
-          props.onChange(parsed)
+          if (Number.isFinite(parsed)) onChange(parsed)
         }}
       />
-    </Field>
+      {unit === undefined ? null : (
+        typeof unit === 'string'
+          ? <span className={cls.numUnit}>{unit}</span>
+          : unit
+      )}
+    </span>
   )
 }
 
@@ -127,19 +181,34 @@ export interface ChoiceOption<T extends string> {
 /** A single-choice control rendered as pills. */
 export function ChoiceRow<T extends string>(props: {
   label: string
-  hint?: string | undefined
+  note?: ReactNode
   value: T
   options: readonly ChoiceOption<T>[]
   onChange: (next: T) => void
-  accessory?: ReactNode
   disabled?: boolean | undefined
+  /** Force the options onto their own line. */
+  wide?: boolean
+  /**
+   * Whether the choice is the user's rather than a fallback.
+   *
+   * Callers whose "inherit" pill is a named value like `inherit` have to say so
+   * here: `value !== ''` would mark an untouched row as overridden, and the bar
+   * is the one mark that claims "this is yours".
+   */
+  overridden?: boolean | undefined
 }): ReactNode {
+  const overridden = props.overridden ?? (props.value !== '')
   return (
-    <Field label={props.label} hint={props.hint} accessory={props.accessory}>
+    <Row
+      label={props.label}
+      note={props.note}
+      overridden={overridden}
+      wide={props.wide}
+    >
       <div className={cls.tagList} role="radiogroup" aria-label={props.label}>
         {props.options.map((option) => (
           <Pill
-            key={option.value}
+            key={option.value || 'inherit'}
             active={option.value === props.value}
             title={option.title}
             role="radio"
@@ -151,35 +220,11 @@ export function ChoiceRow<T extends string>(props: {
           </Pill>
         ))}
       </div>
-    </Field>
+    </Row>
   )
 }
 
-/** A labelled boolean toggle. */
-export function ToggleField(props: {
-  label: string
-  hint?: string | undefined
-  checked: boolean
-  disabled?: boolean
-  title?: string | undefined
-  onChange: (next: boolean) => void
-}): ReactNode {
-  return (
-    <Field label={props.label} hint={props.hint}>
-      <div className={cls.fieldRow}>
-        <Switch
-          checked={props.checked}
-          onChange={props.onChange}
-          label={props.label}
-          disabled={props.disabled}
-          title={props.title}
-        />
-      </div>
-    </Field>
-  )
-}
-
-/** A collapsible section with a status chip. */
+/** A collapsible section card: header row, then its rows. */
 export function SectionShell(props: {
   id: string
   title: string
@@ -194,16 +239,27 @@ export function SectionShell(props: {
   children: ReactNode
 }): ReactNode {
   return (
-    <section className={cls.section} aria-labelledby={`${props.id}-title`}>
-      <div className={cls.sectionHead}>
+    <section className={cls.card} aria-labelledby={`${props.id}-title`}>
+      <div
+        className={cls.cardHead}
+        role="button"
+        tabIndex={0}
+        onClick={props.onToggle}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            props.onToggle()
+          }
+        }}
+      >
+        <span className={cls.cardChevron} data-open={props.open}>▶</span>
         <button
           type="button"
-          className={cls.sectionTitle}
+          className={cls.cardTitle}
           aria-expanded={props.open}
           aria-controls={`${props.id}-body`}
-          onClick={props.onToggle}
-          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', font: 'inherit' }}
           id={`${props.id}-title`}
+          onClick={(event) => { event.stopPropagation(); props.onToggle() }}
         >
           {props.title}
         </button>
@@ -211,8 +267,14 @@ export function SectionShell(props: {
         <span className={cls.spacer} />
         {props.actions}
       </div>
-      {props.description === undefined ? null : <p className={cls.sectionDesc} style={{ margin: 0 }}>{props.description}</p>}
-      {props.open ? <div id={`${props.id}-body`}>{props.children}</div> : null}
+      {props.open ? (
+        <div className={cls.cardBody} id={`${props.id}-body`}>
+          {props.description === undefined ? null : (
+            <p className={cls.cardDesc} style={{ margin: 0 }}>{props.description}</p>
+          )}
+          {props.children}
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -220,11 +282,6 @@ export function SectionShell(props: {
 /** A row of actions. */
 export function Toolbar(props: { children: ReactNode }): ReactNode {
   return <div className={cls.toolbar}>{props.children}</div>
-}
-
-/** A small monospace chip. */
-export function Mono(props: { children: ReactNode }): ReactNode {
-  return <span className={cls.mono}>{props.children}</span>
 }
 
 /** Text button styled as a link, for destructive or secondary row actions. */

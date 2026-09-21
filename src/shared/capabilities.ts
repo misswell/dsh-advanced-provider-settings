@@ -23,7 +23,7 @@
 export const VERIFIED_DSH_VERSION = '0.1.5-rc.2'
 
 /** This plugin's own version. Kept in step with package.json by the build check. */
-export const PLUGIN_VERSION = '0.1.0'
+export const PLUGIN_VERSION = '0.2.0'
 
 /** Namespace owning the OpenAI-compatible provider routes. */
 export const PROVIDER_NAMESPACE = 'llm-pi-ai'
@@ -423,8 +423,15 @@ export const MANAGED_PROVIDER_KEYS = [
   'compat',
 ] as const
 
-/** Model-level keys the plugin writes. Identity and window sizes stay native. */
-export const MANAGED_MODEL_KEYS = ['input', 'reasoningEfforts'] as const
+/**
+ * Model-level keys the plugin writes: exactly the three a model entry accepts.
+ *
+ * Identity, window sizes and token caps stay native to the Models page, and
+ * anything else — headers, retry, transport, image budgets, cache — is rejected
+ * by Harness when it appears on a model entry (schema §6), so it is not in this
+ * list and no control for it appears per model.
+ */
+export const MANAGED_MODEL_KEYS = ['input', 'reasoningEfforts', 'compat'] as const
 
 // --------------------------------------------------------------------------
 // Reserved headers

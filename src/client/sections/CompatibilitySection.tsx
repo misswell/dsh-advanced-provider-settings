@@ -28,8 +28,8 @@ import {
   type CompatFieldDef,
   type CompatGroupId,
 } from '../../shared/capabilities.js'
-import { Field, Notice } from '../components/primitives.js'
-import { GroupHeader, ValueSource } from '../components/visual.js'
+import { Note, NumberBox, Row } from '../components/primitives.js'
+import { GroupHeader } from '../components/visual.js'
 import { cls } from '../styles.js'
 import type { Translate } from '../contract.js'
 import type { ProviderProfile } from '../../shared/types.js'
@@ -46,22 +46,19 @@ export function CompatibilitySection(props: {
 
   return (
     <div className={cls.section}>
-      <p className={cls.hint} style={{ margin: 0 }}>{t('compat.desc')}</p>
       {fields.length === 0 ? (
-        <Notice tone="info">
+        <Note>
           {profile.api === undefined ? t('compat.unknownProtocol') : t('compat.noFields')}
-        </Notice>
+        </Note>
       ) : (
         <>
-          <Field label={t('compat.routeTitle')} hint={t('compat.routeDesc')}>
-            <CompatFieldGrid
-              t={t}
-              fields={fields}
-              values={profile.compat ?? {}}
-              disabled={disabled}
-              onChange={(key, value) => { props.onChange('compat', withValue(profile.compat ?? {}, key, value)) }}
-            />
-          </Field>
+          <CompatFieldGrid
+            t={t}
+            fields={fields}
+            values={profile.compat ?? {}}
+            disabled={disabled}
+            onChange={(key, value) => { props.onChange('compat', withValue(profile.compat ?? {}, key, value)) }}
+          />
           {profile.compat === undefined ? null : (
             <div className={cls.toolbar}>
               <Tag tone="info">{t('compat.overrideCount', { count: Object.keys(profile.compat).length })}</Tag>
@@ -95,6 +92,11 @@ export function groupCompatFields(
  *
  * A filter box appears only once the list is long enough to need one; the
  * point of the grouping is that most users never need it.
+ *
+ * `inheritedValues` is what the same flag resolves to one level up — the route
+ * for a model-level grid, nothing for a route-level one. Showing it is what
+ * makes "Inherit" a decision rather than a blank: without it, per-model editing
+ * is guesswork about which of the two levels a value comes from.
  */
 export function CompatFieldGrid(props: {
   t: Translate
@@ -102,6 +104,10 @@ export function CompatFieldGrid(props: {
   values: Record<string, unknown>
   disabled: boolean
   onChange: (key: string, value: unknown) => void
+  /** Where an un-overridden flag actually takes its value from. */
+  inheritedValues?: Record<string, unknown> | undefined
+  /** Names the level the un-overridden value comes from. */
+  inheritedFrom?: string | undefined
 }): ReactNode {
   const { t, fields, values, disabled } = props
   const [filter, setFilter] = useState('')
@@ -150,6 +156,8 @@ export function CompatFieldGrid(props: {
               t={t}
               field={field}
               value={values[field.key]}
+              inherited={props.inheritedValues?.[field.key]}
+              inheritedFrom={props.inheritedFrom}
               disabled={disabled}
               onChange={(next) => { props.onChange(field.key, next) }}
             />
@@ -166,6 +174,10 @@ export function CompatFieldGrid(props: {
  * A boolean keeps three states rather than two. "Inherit" is not the same as
  * "off" — it leaves the decision to the adapter — so a two-position switch
  * would show a value the plugin cannot actually know.
+ *
+ * When the flag is not set here but IS set one level up, the row says what the
+ * inherited value reads as. That is the difference between an inherited column
+ * you can audit and a column of blanks.
  */
 export function CompatFlagRow(props: {
   t: Translate
@@ -173,27 +185,32 @@ export function CompatFlagRow(props: {
   value: unknown
   disabled: boolean
   onChange: (next: unknown) => void
+  /** The same flag at the level below this one in precedence. */
+  inherited?: unknown
+  /** Where `inherited` comes from, e.g. "route level". */
+  inheritedFrom?: string | undefined
 }): ReactNode {
   const { t, field, value, disabled } = props
   const overridden = value !== undefined
   const label = t(`compat.f.${field.key}.label`)
+  const note = (() => {
+    const explanation = t(`compat.f.${field.key}.note`)
+    if (overridden || props.inherited === undefined) return explanation
+    return props.inheritedFrom === undefined
+      ? explanation
+      : `${explanation} · ${t('compat.inheritedFrom', { from: props.inheritedFrom, value: describeCompatValue(t, field, props.inherited) })}`
+  })()
 
   const control = (() => {
     if (field.kind === 'number') {
       return (
-        <Input
-          className={`${cls.mono} ${cls.inputNarrow}`}
-          type="text"
-          inputMode="numeric"
-          aria-label={label}
-          disabled={disabled}
-          value={value === undefined || value === null ? '' : String(value)}
+        <NumberBox
+          value={typeof value === 'number' ? value : undefined}
           placeholder={t('common.inherit')}
-          onChange={(event) => {
-            const raw = event.currentTarget.value.trim()
-            if (raw === '') props.onChange(undefined)
-            else if (/^-?\d+$/.test(raw)) props.onChange(Number(raw))
-          }}
+          ariaLabel={label}
+          disabled={disabled}
+          parse={(raw) => (/^-?\d+$/.test(raw) ? Number(raw) : undefined)}
+          onChange={(next) => { props.onChange(next) }}
         />
       )
     }
@@ -201,7 +218,7 @@ export function CompatFlagRow(props: {
     if (field.kind === 'dict') {
       return (
         <Input
-          className={cls.mono}
+          className={`${cls.mono} ${cls.input}`}
           type="text"
           aria-label={label}
           disabled={disabled}
@@ -265,18 +282,38 @@ export function CompatFlagRow(props: {
   })()
 
   return (
-    <div className={cls.flag} data-overridden={overridden ? 'true' : 'false'}>
-      <div className={cls.flagText}>
-        <span className={cls.flagLabel}>
-          {label}
-          <code className={cls.flagKey}>{field.key}</code>
-          <ValueSource t={t} overridden={overridden} />
-        </span>
-        <span className={cls.flagNote}>{t(`compat.f.${field.key}.note`)}</span>
-      </div>
-      <div className={cls.flagControl}>{control}</div>
-    </div>
+    <Row
+      label={label}
+      fieldKey={field.key}
+      note={note}
+      overridden={overridden}
+      wide={field.kind === 'dict' || (field.kind === 'enum' && (field.options?.length ?? 0) > 3)}
+    >
+      {control}
+    </Row>
   )
+}
+
+/**
+ * How one compat value reads in prose, for the "inherited" line.
+ *
+ * Deliberately not the raw wire value: `supportsStore: true` is written as
+ * "supported" because that is the question the flag answers.
+ */
+export function describeCompatValue(
+  t: Translate,
+  field: CompatFieldDef,
+  value: unknown,
+): string {
+  if (field.kind === 'boolean') {
+    return value ? t('compat.supported') : t('compat.unsupported')
+  }
+  if (field.kind === 'enum') return t(`compat.option.${String(value)}`)
+  if (field.kind === 'number') return String(value)
+  if (typeof value === 'object' && value !== null) {
+    return t('compat.dictKeys', { count: Object.keys(value).length })
+  }
+  return String(value)
 }
 
 /** Return a copy of a compat record with one key set or removed. */

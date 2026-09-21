@@ -1,20 +1,21 @@
 /**
  * The Settings → "Provider Advanced" page (spec sections 42, 55, 50).
  *
- * This page owns the one piece of configuration that has no provider to hang
- * off: the global request header list. It also carries diagnostics, the legacy
- * migration prompt, and a read-only roll-up of what each provider resolves to —
- * all of which are cross-provider questions that no provider card can answer.
+ * This page owns the two things no provider card can answer: the global request
+ * header list that applies to every route, and a per-provider editor reached
+ * without hunting through the Models page. Diagnostics and the legacy migration
+ * prompt ride along because they are cross-provider questions.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
-import { PLUGIN_NAMESPACE, PROVIDER_NAMESPACE, VERIFIED_DSH_VERSION } from '../shared/capabilities.js'
+import { Button, Pill, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { VERIFIED_DSH_VERSION } from '../shared/capabilities.js'
 import { diffGlobalHeaders } from '../shared/patch.js'
 import { headerEntriesOf, type HeaderEntry } from '../shared/headers.js'
 import { cls } from './styles.js'
 import { useOwnScope, useProviderScope, useRpcQuery, useSettingsSnapshot, useTranslate } from './hooks.js'
-import { Field, LinkButton, Notice, SectionShell, Toolbar } from './components/primitives.js'
+import { LinkButton, Notice, SectionShell, Toolbar } from './components/primitives.js'
 import { HeaderEditor, hasBlockingRow } from './components/HeaderEditor.js'
+import { ProviderAdvancedEditor } from './ProviderAdvancedSettings.js'
 import type { ClientContext, Translate } from './contract.js'
 
 /** Diagnostics payload the host returns. */
@@ -65,7 +66,12 @@ export function GlobalSettingsPage(props: { ctx: ClientContext }): ReactNode {
 
   const [headers, setHeaders] = useState<HeaderEntry[]>(() => headerEntriesOf(undefined))
   const [message, setMessage] = useState<{ tone: 'success' | 'warning' | 'danger'; text: string } | undefined>(undefined)
-  const [expanded, setExpanded] = useState<readonly string[]>(['global-headers', 'preview', 'diagnostics'])
+  // Every level-1 disclosure starts folded, and so does every level-2 section
+  // inside the editor. Each header carries the badge that says what is configured
+  // there, so the page arrives as a list of answers rather than nine open forms.
+  const [expanded, setExpanded] = useState<readonly string[]>([])
+  const [selected, setSelected] = useState<string | undefined>(undefined)
+  const [editorDirty, setEditorDirty] = useState(false)
 
   const committedHeaders = useMemo(() => headerEntriesOf(own.value?.globalHeaders), [own.value])
   const dirty = useMemo(
@@ -85,6 +91,12 @@ export function GlobalSettingsPage(props: { ctx: ClientContext }): ReactNode {
     () => Object.entries(providerSnapshot.value?.providers ?? {}),
     [providerSnapshot.value],
   )
+
+  // The selection follows the roster: a provider removed elsewhere must not leave
+  // the editor pointed at an id that no longer resolves.
+  const active = providers.some(([providerId]) => providerId === selected)
+    ? (selected as string)
+    : (providers[0]?.[0] ?? '')
 
   const toggle = useCallback((id: string): void => {
     setExpanded((current) => current.includes(id) ? current.filter((at) => at !== id) : [...current, id])
@@ -157,7 +169,7 @@ export function GlobalSettingsPage(props: { ctx: ClientContext }): ReactNode {
     <div className={cls.root}>
       <header>
         <h2 style={{ margin: '0 0 4px' }}>{t('global.title')}</h2>
-        <p className={cls.sectionDesc} style={{ margin: 0 }}>{t('global.desc')}</p>
+        <p className={cls.hint} style={{ margin: 0 }}>{t('global.desc')}</p>
       </header>
 
       {messages(t, message, own)}
@@ -192,28 +204,33 @@ export function GlobalSettingsPage(props: { ctx: ClientContext }): ReactNode {
       </SectionShell>
 
       <SectionShell
-        id="aps-preview"
+        id="aps-providers"
         title={t('global.providersTitle')}
         description={t('global.providersDesc')}
-        badge={t('status.count', { count: providers.length })}
-        open={expanded.includes('preview')}
-        onToggle={() => { toggle('preview') }}
+        badge={providers.length === 0 ? undefined : t('status.count', { count: providers.length })}
+        open={expanded.includes('providers')}
+        onToggle={() => { toggle('providers') }}
       >
         {providers.length === 0 ? (
           <Notice tone="info">{t('global.providerNone')}</Notice>
         ) : (
-          <div className={cls.preview}>
-            {providers.map(([providerId, profile]) => (
-              <div className={cls.previewLine} key={providerId}>
-                <span className={cls.previewKey}>{profile.displayName ?? providerId}</span>
-                <span className={cls.previewValue}>
-                  {providerId} · {t('preview.key.headers')}: {Object.keys(profile.headers ?? {}).length}
-                  {profile.retryPolicy === undefined ? '' : ` · ${t('section.retry')}: ${profile.retryPolicy.mode}`}
-                  {profile.reasoning === undefined ? '' : ` · ${t('section.reasoning')}: ${profile.reasoning}`}
-                </span>
-              </div>
-            ))}
-          </div>
+          <>
+            <ProviderPicker
+              label={t('global.providersTitle')}
+              providers={providers}
+              active={active}
+              refuseSwitch={editorDirty}
+              onSelect={setSelected}
+            />
+            {editorDirty ? <span className={cls.hint}>{t('global.switchDirty')}</span> : null}
+            <ProviderAdvancedEditor
+              key={active}
+              ctx={ctx}
+              providerId={active}
+              embedded
+              onDirtyChange={setEditorDirty}
+            />
+          </>
         )}
       </SectionShell>
 
@@ -268,13 +285,38 @@ export function GlobalSettingsPage(props: { ctx: ClientContext }): ReactNode {
           </Button>
         </Toolbar>
       </SectionShell>
+    </div>
+  )
+}
 
-      <Field label={t('global.openModels')}>
-        <Toolbar>
-          <Tag tone="neutral">{PLUGIN_NAMESPACE}</Tag>
-          <Tag tone="neutral">{PROVIDER_NAMESPACE}</Tag>
-        </Toolbar>
-      </Field>
+/**
+ * Which provider the editor below is configured for.
+ *
+ * A row of pills rather than a dropdown because the roster is short and the
+ * choice is the page's main action.
+ */
+export function ProviderPicker(props: {
+  label: string
+  providers: readonly (readonly [string, { displayName?: string }])[]
+  active: string
+  /** An unsaved draft belongs to one provider, so another choice is refused. */
+  refuseSwitch: boolean
+  onSelect: (providerId: string) => void
+}): ReactNode {
+  return (
+    <div className={cls.providerPicker} role="radiogroup" aria-label={props.label}>
+      {props.providers.map(([providerId, profile]) => (
+        <Pill
+          key={providerId}
+          role="radio"
+          aria-checked={providerId === props.active}
+          active={providerId === props.active}
+          disabled={props.refuseSwitch && providerId !== props.active}
+          onClick={() => { props.onSelect(providerId) }}
+        >
+          {profile.displayName ?? providerId}
+        </Pill>
+      ))}
     </div>
   )
 }

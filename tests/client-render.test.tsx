@@ -17,8 +17,8 @@
 import { describe, expect, it } from 'vitest'
 import * as React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ProviderAdvancedSettings } from '../src/client/ProviderAdvancedSettings.js'
-import { GlobalSettingsPage } from '../src/client/GlobalSettingsSection.js'
+import { ProviderAdvancedEditor, ProviderAdvancedSettings } from '../src/client/ProviderAdvancedSettings.js'
+import { GlobalSettingsPage, ProviderPicker } from '../src/client/GlobalSettingsSection.js'
 import { ModelsFooter } from '../src/client/FooterSeat.js'
 import { HeaderEditor } from '../src/client/components/HeaderEditor.js'
 import { RetryEditor } from '../src/client/components/RetryEditor.js'
@@ -264,14 +264,48 @@ describe('provider card seat', () => {
     // added section, badge or advisory with no translation fails here instead of
     // reaching a user as a raw key.
     const h = harness({ providers: { providers: { gateway: RICH } } })
+    // Every card starts folded, so mounting the panel alone would exercise only
+    // section headers. Each body is therefore mounted directly as well, through a
+    // translate that records into the same set — otherwise this guard quietly
+    // loses the half of the dictionary it exists to cover.
+    const record = (key: string, params?: Record<string, string | number>): string => {
+      h.requestedKeys.add(key)
+      return t(key, params)
+    }
+    const noIssues: ReadonlyMap<string, string> = NO_ISSUES
+    const idle = (): void => {}
+
     render(<ProviderAdvancedSettings ctx={h.ctx} provider={entry()} configured keyConfigured />)
+    render(<ProviderAdvancedEditor ctx={h.ctx} providerId="gateway" embedded />)
     render(<GlobalSettingsPage ctx={h.ctx} />)
     render(<ModelsFooter ctx={h.ctx} />)
+    render(<HeaderEditor t={record} rows={headerEntriesOf(RICH.headers)} onChange={idle} scope="provider" showPresets />)
+    render(<HeaderEditor t={record} rows={[]} onChange={idle} scope="global" showPresets />)
+    render(
+      <RetryEditor
+        t={record}
+        state={toRetryEditorState(RICH.retryPolicy)}
+        onChange={idle}
+        issues={noIssues}
+        acknowledged={false}
+        onAcknowledge={idle}
+      />,
+    )
+    render(
+      <RetryEditor t={record} state={null} onChange={idle} issues={noIssues} acknowledged={false} onAcknowledge={idle} />,
+    )
+    render(<NetworkSection t={record} profile={RICH} disabled={false} issues={noIssues} onChange={idle} />)
+    render(<VisionSection t={record} profile={RICH} disabled={false} issues={noIssues} onChange={idle} />)
+    render(<ReasoningSection t={record} profile={RICH} disabled={false} issues={noIssues} onChange={idle} />)
+    render(<CompatibilitySection t={record} profile={RICH} disabled={false} onChange={idle} />)
+    render(<CompatibilitySection t={record} profile={{ api: 'anthropic-messages' }} disabled={false} onChange={idle} />)
+    render(<ModelsSection t={record} profile={RICH} disabled={false} onModelField={idle} />)
+    render(<PreviewSection t={record} profile={RICH} loading={false} effective={undefined} />)
 
     const missing = [...h.requestedKeys].filter((key) => !(key in en))
     expect(missing).toEqual([])
     // Guard against a vacuous pass: the tree must have asked for many keys.
-    expect(h.requestedKeys.size).toBeGreaterThan(30)
+    expect(h.requestedKeys.size).toBeGreaterThan(150)
   })
 
   it('renders nothing for a provider family it does not own', () => {
@@ -527,23 +561,53 @@ describe('provider sections', () => {
     expect(html).toContain('compat.unknownProtocol')
   })
 
-  it('renders the models section with per-model rows', () => {
+  it('renders one model at a time, with the picker listing every model', () => {
     const html = render(
-      <ModelsSection t={t} profile={profile} disabled={false} onChange={() => {}} onModelField={() => {}} />,
+      <ModelsSection t={t} profile={profile} disabled={false} onModelField={() => {}} />,
     )
-    expect(html).toContain('models.desc')
+    // The card's own explanation belongs to its header, not to the body.
+    expect(html).not.toContain('models.desc')
+    // Both models are selectable, and the image-capable one is marked as such —
+    // that distinction is the reason the picker exists.
     expect(html).toContain('fast')
     expect(html).toContain('vision')
-    // The collapsed row already states each model's declared input, which is the
-    // thing a reader scans for.
-    expect(html).toContain('vision.textOnly')
-    expect(html).toContain('vision.textImage')
-    expect(html).toContain('models.overrides(count=1)')
+    expect(html).toContain('models.imageMark')
+    // Only the selected model's editor renders, so its fields are on screen once.
+    expect(html.match(/reasoning\.levelsTitle/g)?.length).toBe(1)
+    expect(html).toContain('models.inputOverridesCatalog')
+    // A model that sets nothing says what it falls back to instead of a blank.
+    expect(html).toContain('compat.inheritedFrom(from=compat.routeLevel,value=compat.supported)')
+    // What cannot be configured per model is stated, not left to be discovered.
+    expect(html).toContain('models.providerOnly')
+  })
+
+  it('shows the provider default a model inherits its input from', () => {
+    const html = render(
+      <ModelsSection
+        t={t}
+        profile={{ ...profile, models: [{ id: 'plain' }] }}
+        disabled={false}
+        onModelField={() => {}}
+      />,
+    )
+    expect(html).toContain('models.inheritsDefault(value=vision.textImage)')
+  })
+
+  it('falls back to the catalog when no provider default declares input', () => {
+    const html = render(
+      <ModelsSection
+        t={t}
+        profile={{ ...profile, defaultInput: undefined, models: [{ id: 'plain' }] }}
+        disabled={false}
+        onModelField={() => {}}
+      />,
+    )
+    expect(html).toContain('models.inheritsCatalog')
   })
 
   it('renders the models section with no models', () => {
     const html = render(
-      <ModelsSection t={t} profile={{}} disabled={false} onChange={() => {}} onModelField={() => {}} />,
+      <ModelsSection t={t} profile={{}} disabled={false} onModelField={() => {}} />,
     )
     expect(html).toContain('models.none')
   })
@@ -615,14 +679,68 @@ describe('settings page', () => {
     expect(html).toContain('global.title')
     expect(html).toContain('headers.globalTitle')
     expect(html).toContain('diag.title')
-    // The configured provider rolls up here.
+    // Every level-1 card starts folded, so the roll-up has to live in the header:
+    // the provider count is the badge that says there is something to open.
+    expect(html.match(/aria-expanded="false"/g)).toHaveLength(3)
+    expect(html).toContain('status.count(count=1)')
+    expect(html).not.toContain('aps-embedded')
+  })
+
+  it('edits the selected provider instead of only listing it', () => {
+    // The page used to print one read-only line per provider and point at the
+    // Models page for the actual controls. The providers card now starts folded
+    // like every other card, so mount what it mounts and assert the whole editor
+    // is there — a provider must arrive and find controls, not a summary.
+    const h = harness({ providers: { providers: { gateway: RICH } } })
+    const html = render(<ProviderAdvancedEditor ctx={h.ctx} providerId="gateway" embedded />)
+    expect(html).toContain('aps-embedded')
+    expect(html).toContain('section.retry')
+    expect(html).toContain('section.compatibility')
+    expect(html).toContain('common.save')
+    // The committed profile reaches the panel, not a text summary of it: the
+    // retry badge carries the number from the fixture's own policy.
+    expect(html).toContain('status.retries(count=4)')
+    // One editor mounts at a time, so the section ids cannot collide.
+    expect(html.match(/id="aps-retry-title"/g)).toHaveLength(1)
+  })
+
+  it('offers every configured provider as a choice', () => {
+    const html = render(
+      <ProviderPicker
+        label="global.providersTitle"
+        providers={[['gateway', { displayName: 'Gateway' }], ['ark', {}]]}
+        active="gateway"
+        refuseSwitch={false}
+        onSelect={() => undefined}
+      />,
+    )
+    expect(html).toContain('role="radiogroup"')
     expect(html).toContain('Gateway')
+    expect(html).toContain('ark')
+    expect(html).toContain('aria-checked="true"')
+    expect(html.match(/aria-checked="false"/g)).toHaveLength(1)
+  })
+
+  it('refuses to switch away from a provider with unsaved edits', () => {
+    const html = render(
+      <ProviderPicker
+        label="global.providersTitle"
+        providers={[['gateway', {}], ['ark', {}]]}
+        active="gateway"
+        refuseSwitch
+        onSelect={() => undefined}
+      />,
+    )
+    expect(html).toContain('data-disabled="true"')
+    expect(html.match(/data-disabled="false"/g)).toHaveLength(1)
   })
 
   it('renders with nothing configured at all', () => {
     const h = harness({ providers: {}, own: {} })
     const html = render(<GlobalSettingsPage ctx={h.ctx} />)
-    expect(html).toContain('global.providerNone')
+    // No badge on the providers card, and no editor mounted behind it.
+    expect(html).not.toContain('status.count')
+    expect(html).not.toContain('aps-embedded')
   })
 
   it('renders the read-only notice when writes are refused', () => {
@@ -674,7 +792,7 @@ describe('visual configuration', () => {
     // ...and the raw identifier survives only as a subtitle, so it can still be
     // matched against provider documentation without being the primary label.
     expect(html).toContain('supportsStore')
-    expect(html).toContain('aps-flag-key')
+    expect(html).toContain('aps-row-key')
   })
 
   it('groups the flags by concern instead of listing 19 of them flat', () => {
@@ -703,26 +821,28 @@ describe('visual configuration', () => {
     expect(short).not.toContain('compat.filter')
   })
 
-  it('folds xhigh onto the high rung of the effort ladder', () => {
-    const folded = render(
+  it('states the xhigh fold in words instead of drawing a second ladder', () => {
+    const html = render(
       <ReasoningSection t={t} profile={{ ...RICH, reasoning: 'xhigh' }} disabled={false} issues={NO_ISSUES} onChange={() => {}} />,
     )
-    expect(folded).toContain('reasoning.curveFolded')
-    expect(folded).toContain('level.high.label')
-    // A level that reaches the wire unchanged says so instead.
-    const direct = render(
-      <ReasoningSection t={t} profile={{ ...RICH, reasoning: 'medium' }} disabled={false} issues={NO_ISSUES} onChange={() => {}} />,
-    )
-    expect(direct).not.toContain('reasoning.curveFolded')
+    // The folded level is offered, and the copy that matters — that DSH pins it
+    // to the `high` budget — is said once, beside the picker.
+    expect(html).toContain('level.xhigh.label')
+    expect(html).toContain('reasoning.foldsToHigh')
+    // A picture of the same ladder would repeat what the pills already say.
+    expect(html).not.toContain('aps-ladder')
+    expect(html).not.toContain('reasoning.curve')
   })
 
-  it('marks the inherited default on a numeric slider', () => {
+  it('marks the inherited default as the placeholder, not as a second widget', () => {
     const html = render(<NetworkSection t={t} profile={{}} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
-    // The idle timeout inherits Harness's 300000 ms, shown as a readable 5 min
-    // rather than a bare number in a placeholder.
+    // The idle timeout inherits Harness's 300000 ms: the box is empty with that
+    // number as its placeholder, and the note says what it means out loud.
+    expect(html).toContain('placeholder="300000"')
     expect(html).toContain('field.defaultIs(value=5 unit.min)')
-    expect(html).toContain('aps-slider-inherited')
-    expect(html).toContain('field.inherited')
+    // One control per setting: no slider stacked on top of the input.
+    expect(html).not.toContain('aps-slider')
+    expect(html.match(/type="text"/g)?.length).toBe(3)
   })
 
   it('offers a reset only once a value is overridden', () => {
@@ -733,17 +853,22 @@ describe('visual configuration', () => {
       <NetworkSection t={t} profile={{ timeoutMs: 30000 }} disabled={false} issues={NO_ISSUES} onChange={() => {}} />,
     )
     expect(overridden).toContain('field.resetToDefault')
-    expect(overridden).toContain('field.overridden')
+    // The overridden state is the row's accent bar, not a word on every row.
+    expect(overridden).toContain('data-overridden="true"')
     // 30000 ms is rendered the way a person would say it.
     expect(overridden).toContain('30 unit.s')
   })
 
   it('renders byte budgets in binary units rather than raw byte counts', () => {
     const html = render(<VisionSection t={t} profile={RICH} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
-    // 10485760 bytes is 10 MiB, and the echo says so in the unit the schema
-    // actually means — deliberately not "MB", which would be a different number.
-    expect(html).toContain('10 unit.mib')
-    expect(html).toContain('MiB')
+    // 10485760 bytes is edited as 10 in the unit the schema actually means —
+    // deliberately MiB rather than MB, which would be a different number.
+    expect(html).toContain('value="10"')
+    expect(html).toContain('<option value="MiB" selected="">MiB</option>')
+    expect(html).not.toContain('10485760')
+    // The one row that says more than the box is the pixel budget, because the
+    // box cannot show what the budget works out to.
+    expect(html).toContain('2 unit.mib · vision.pixelBudgetHint(size=≈ 1448 × 1448)')
   })
 
   it('states a retry delay in words, not only in milliseconds', () => {
@@ -832,11 +957,15 @@ describe('visual configuration', () => {
     render(<ReasoningSection t={record} profile={RICH} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
     render(<NetworkSection t={record} profile={RICH} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
     render(<VisionSection t={record} profile={RICH} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
+    // The preview's labels are assembled from computed keys, which is exactly how
+    // a line can end up printing its own dictionary key at the user.
+    render(<PreviewSection t={record} profile={RICH} effective={undefined} loading={false} />)
 
     expect(h.requestedKeys.has('compat.f.supportsStore.label')).toBe(true)
     expect(h.requestedKeys.has('compat.group.request.label')).toBe(true)
-    expect(h.requestedKeys.has('field.inherited')).toBe(true)
+    expect(h.requestedKeys.has('field.resetToDefault.note')).toBe(true)
     expect(h.requestedKeys.has('level.high.label')).toBe(true)
+    expect(h.requestedKeys.has('preview.key.timeoutIdle')).toBe(true)
     // The guard the suite relies on is only meaningful if it is not vacuous.
     expect(h.requestedKeys.size).toBeGreaterThan(80)
     expect([...h.requestedKeys].filter((key) => !(key in en))).toEqual([])

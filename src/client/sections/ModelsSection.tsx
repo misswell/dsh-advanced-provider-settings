@@ -1,34 +1,46 @@
 /**
- * Models section: the per-model fields this plugin owns (spec sections 29, 30, 40).
+ * Per-model configuration (spec sections 29, 30, 40).
  *
- * Only `input` and `reasoningEfforts` are editable — everything else about a
- * model (its id, context window, output limit) belongs to the Models page, so
- * the editor addresses models by index and never reorders or renames them.
+ * This is the level the user actually thinks in: a provider is a credential and
+ * a URL, but "does THIS model take images" and "what does its `high` map to on
+ * the wire" are per-model facts. So the card is a master-detail — pick a model,
+ * edit that model — rather than a list of accordions, and it sits above the
+ * provider-wide cards instead of trailing them.
  *
- * The per-model compat grid is filtered by the ROUTE protocol because a
- * mismatched field here is a hard error in Harness rather than a no-op.
+ * Harness accepts exactly three fields on a model entry: `input`,
+ * `reasoningEfforts` and `compat` (plus `name`/`contextWindow`/`maxTokens`,
+ * which belong to the Models page). Anything else written there is rejected by
+ * the strict validation a settings write uses, so this editor offers nothing
+ * else — and says so, because "I expected a retry setting here" is otherwise
+ * unanswerable from the screen.
+ *
+ * The per-model compat grid is filtered by the ROUTE protocol for the same
+ * reason: a field the protocol does not read is a hard error at model level
+ * where it is only ignored at route level.
  */
 import { useMemo, useState, type ReactNode } from 'react'
-import { Button, Input, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
-import { THINKING_LEVELS } from '../../shared/capabilities.js'
-import { compatFieldsFor } from '../../shared/capabilities.js'
-import { ChoiceRow, Field, Notice } from '../components/primitives.js'
+import { Button, Input, Pill, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MANAGED_MODEL_KEYS, THINKING_LEVELS, compatFieldsFor } from '../../shared/capabilities.js'
+import { claimsImageSupport } from '../../shared/vision.js'
+import { ChoiceRow, Field, Note, Row } from '../components/primitives.js'
 import { CompatFieldGrid, withValue } from './CompatibilitySection.js'
 import { cls } from '../styles.js'
 import type { Translate } from '../contract.js'
 import type { ProviderModelEntry, ProviderProfile } from '../../shared/types.js'
 
-/** Render the Models section body. */
+/** How many models make a picker long enough to need a filter box. */
+const FILTER_AT = 8
+
+/** Render the per-model editor for one provider. */
 export function ModelsSection(props: {
   t: Translate
   profile: ProviderProfile
   disabled: boolean
-  onChange: (field: string, value: unknown) => void
   onModelField: (index: number, field: string, value: unknown) => void
 }): ReactNode {
-  const { t, profile, disabled, onChange, onModelField } = props
+  const { t, profile, disabled, onModelField } = props
   const [filter, setFilter] = useState('')
-  const [expanded, setExpanded] = useState<readonly number[]>([])
+  const [selected, setSelected] = useState(0)
 
   const models = useMemo(
     () => (Array.isArray(profile.models) ? profile.models : []),
@@ -38,179 +50,198 @@ export function ModelsSection(props: {
     const needle = filter.trim().toLowerCase()
     return models
       .map((model, index) => ({ model, index }))
-      .filter(({ model }) => needle.length === 0 || (model.id ?? '').toLowerCase().includes(needle) || (model.name ?? '').toLowerCase().includes(needle))
+      .filter(({ model }) => needle.length === 0
+        || (model.id ?? '').toLowerCase().includes(needle)
+        || (model.name ?? '').toLowerCase().includes(needle))
   }, [models, filter])
 
   if (models.length === 0) {
     return (
       <div className={cls.section}>
-        <Notice tone="info">{t('models.none')}</Notice>
+        <Note>{t('models.none')}</Note>
       </div>
     )
   }
 
-  const toggle = (index: number): void => {
-    setExpanded((current) => current.includes(index) ? current.filter((at) => at !== index) : [...current, index])
-  }
+  // A filter that hides the current selection must not hide the editor with it.
+  const current = models[Math.min(selected, models.length - 1)] as ProviderModelEntry
+  const currentIndex = Math.min(selected, models.length - 1)
 
   return (
     <div className={cls.section}>
-      <p className={cls.hint} style={{ margin: 0 }}>{t('models.desc')}</p>
-
-      <div className={cls.modelFilter}>
-        <Input
-          className={`${cls.mono} ${cls.input}`}
-          value={filter}
-          placeholder={t('models.filter')}
-          aria-label={t('models.filter')}
-          spellCheck={false}
-          onChange={(event) => { setFilter(event.currentTarget.value) }}
-        />
-        <Tag tone="neutral">{visible.length} / {models.length}</Tag>
+      <div className={cls.modelPicker}>
+        {models.length > FILTER_AT ? (
+          <div className={cls.fieldRow}>
+            <Input
+              className={`${cls.mono} ${cls.input}`}
+              value={filter}
+              placeholder={t('models.filter')}
+              aria-label={t('models.filter')}
+              spellCheck={false}
+              onChange={(event) => { setFilter(event.currentTarget.value) }}
+            />
+            <Tag tone="neutral">{visible.length} / {models.length}</Tag>
+          </div>
+        ) : null}
+        <div className={cls.pickerList} role="radiogroup" aria-label={t('models.pick')}>
+          {visible.length === 0 ? (
+            <p className={cls.hint} style={{ margin: 0 }}>{t('models.noneMatch')}</p>
+          ) : null}
+          {visible.map(({ model, index }) => {
+            const overrides = overrideCountOf(model)
+            return (
+              <Pill
+                key={`${model.id ?? 'model'}-${String(index)}`}
+                role="radio"
+                aria-checked={index === currentIndex}
+                active={index === currentIndex}
+                title={[
+                  model.id ?? '',
+                  overrides > 0 ? t('models.hasOverrides', { count: overrides }) : '',
+                ].filter((part) => part !== '').join(' · ')}
+                onClick={() => { setSelected(index) }}
+              >
+                <span className={cls.pickerName}>{model.id ?? `#${String(index)}`}</span>
+                {claimsImageSupport(model.input) ? (
+                  <span className={cls.pickerMark} data-image="true">{t('models.imageMark')}</span>
+                ) : null}
+                {overrides > 0 ? <span className={cls.pickerDot} /> : null}
+              </Pill>
+            )
+          })}
+        </div>
       </div>
 
-      <div className={cls.modelList}>
-        {visible.map(({ model, index }) => (
-          <ModelRow
-            key={`${model.id ?? 'model'}-${String(index)}`}
-            t={t}
-            model={model}
-            index={index}
-            protocol={profile.api}
-            disabled={disabled}
-            open={expanded.includes(index)}
-            onToggle={() => { toggle(index) }}
-            onModelField={onModelField}
-          />
-        ))}
-      </div>
-
-      {Object.keys(profile.compat ?? {}).length === 0 ? null : (
-        <Notice tone="warning">{t('compat.routeDesc')}</Notice>
-      )}
-      <div className={cls.toolbar}>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          onClick={() => { onChange('models', undefined) }}
-          title={t('common.inheritHint')}
-        >
-          {t('common.resetSection')}
-        </Button>
-      </div>
+      <ModelEditor
+        // Remounting on selection keeps a typed-but-empty field from carrying
+        // over from the previous model.
+        key={`model-${String(currentIndex)}`}
+        t={t}
+        profile={profile}
+        model={current}
+        index={currentIndex}
+        disabled={disabled}
+        onModelField={onModelField}
+      />
     </div>
   )
 }
 
-/** One model's row and its expanded editor. */
-function ModelRow(props: {
+/** The three fields one model can carry, edited in place. */
+function ModelEditor(props: {
   t: Translate
+  profile: ProviderProfile
   model: ProviderModelEntry
   index: number
-  protocol: string | undefined
   disabled: boolean
-  open: boolean
-  onToggle: () => void
   onModelField: (index: number, field: string, value: unknown) => void
 }): ReactNode {
-  const { t, model, index, disabled, onModelField } = props
+  const { t, profile, model, index, disabled, onModelField } = props
   const efforts = model.reasoningEfforts
   const effortsDisabled = efforts === false
   const mapping = effortsDisabled || efforts === undefined ? {} : efforts
+  const fields = compatFieldsFor(profile.api)
+  const id = model.id ?? `#${String(index)}`
 
-  const overrideCount = [model.input, model.reasoningEfforts, model.compat]
-    .filter((value) => value !== undefined).length
+  const setEffort = (level: string, raw: string): void => {
+    const next = { ...(mapping as Record<string, string | null>) }
+    // Blank clears the level: DSH pins an undeclared level to null, which means
+    // "this model does not support it".
+    if (raw === '') delete next[level]
+    else next[level] = raw
+    onModelField(index, 'reasoningEfforts', Object.keys(next).length === 0 ? undefined : next)
+  }
 
   return (
-    <div className={cls.modelRow} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
-      <div className={cls.fieldRow}>
-        <button
-          type="button"
-          className={cls.modelId}
-          aria-expanded={props.open}
-          onClick={props.onToggle}
-          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textAlign: 'left' }}
-        >
-          {props.open ? '▾' : '▸'} {model.id ?? `#${String(index)}`}
-        </button>
-        {overrideCount === 0 ? null : <Tag tone="info">{t('models.overrides', { count: overrideCount })}</Tag>}
-        <Tag tone={inputHasImage(model.input) ? 'success' : 'outline'}>
-          {inputHasImage(model.input) ? t('vision.textImage') : t('vision.textOnly')}
-        </Tag>
+    <div className={cls.modelEditor}>
+      <div className={cls.modelEditorHead}>
+        <code className={cls.modelEditorId}>{id}</code>
+        <span className={cls.spacer} />
+        {overrideCountOf(model) > 0 ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            onClick={() => {
+              for (const field of MANAGED_MODEL_KEYS) onModelField(index, field, undefined)
+            }}
+          >
+            {t('models.clearOverrides')}
+          </Button>
+        ) : null}
       </div>
 
-      {props.open ? (
-        <div className={cls.section} style={{ paddingLeft: 14 }}>
-          <ChoiceRow
-            label={t('vision.defaultInput')}
-            value={inputChoiceOf(model.input)}
+      <ChoiceRow
+        label={t('models.inputTitle')}
+        note={model.input === undefined
+          ? profile.defaultInput === undefined || profile.defaultInput.length === 0
+            ? t('models.inheritsCatalog')
+            : t('models.inheritsDefault', {
+              value: claimsImageSupport(profile.defaultInput) ? t('vision.textImage') : t('vision.textOnly'),
+            })
+          : t('models.inputOverridesCatalog')}
+        value={inputChoiceOf(model.input)}
+        overridden={model.input !== undefined}
+        disabled={disabled}
+        options={[
+          { value: 'inherit', label: t('common.inherit'), title: t('common.inheritHint') },
+          { value: 'text', label: t('vision.textOnly') },
+          { value: 'text-image', label: t('vision.textImage') },
+        ]}
+        onChange={(next) => {
+          onModelField(index, 'input', next === 'inherit' ? undefined : next === 'text' ? ['text'] : ['text', 'image'])
+        }}
+      />
+
+      <Row label={t('reasoning.levelsTitle')} note={t('reasoning.levelsDesc')} wide>
+        {effortsDisabled ? (
+          <Note>{t('reasoning.effortsDisabled')}</Note>
+        ) : (
+          <div className={cls.grid}>
+            {THINKING_LEVELS.map((level) => {
+              const wire = (mapping as Record<string, string | null>)[level]
+              return (
+                <Field key={level} label={t(`level.${level}.label`)}>
+                  <Input
+                    className={`${cls.mono} ${cls.input}`}
+                    value={wire === null || wire === undefined ? '' : wire}
+                    placeholder={t('reasoning.unsupported')}
+                    aria-label={`${level} ${t('reasoning.wireValue')}`}
+                    disabled={disabled}
+                    spellCheck={false}
+                    onChange={(event) => { setEffort(level, event.currentTarget.value) }}
+                  />
+                </Field>
+              )
+            })}
+          </div>
+        )}
+      </Row>
+
+      {fields.length === 0 ? null : (
+        <Row label={t('compat.modelTitle')} note={t('compat.modelDesc')} wide>
+          <CompatFieldGrid
+            t={t}
+            fields={fields}
+            values={(model.compat ?? {}) as Record<string, unknown>}
             disabled={disabled}
-            options={[
-              { value: 'inherit', label: t('common.inherit'), title: t('common.inheritHint') },
-              { value: 'text', label: t('vision.textOnly') },
-              { value: 'text-image', label: t('vision.textImage') },
-            ]}
-            onChange={(next) => {
-              onModelField(index, 'input', next === 'inherit' ? undefined : next === 'text' ? ['text'] : ['text', 'image'])
+            inheritedValues={(profile.compat ?? {}) as Record<string, unknown>}
+            inheritedFrom={t('compat.routeLevel')}
+            onChange={(key, value) => {
+              onModelField(index, 'compat', withValue((model.compat ?? {}) as Record<string, unknown>, key, value))
             }}
           />
+        </Row>
+      )}
 
-          <Field label={t('reasoning.levelsTitle')} hint={t('reasoning.levelsDesc')}>
-            {effortsDisabled ? (
-              <Notice tone="info">{t('reasoning.effortsDisabled')}</Notice>
-            ) : (
-              <div className={cls.grid}>
-                {THINKING_LEVELS.map((level) => {
-                  const wire = (mapping as Record<string, string | null>)[level]
-                  return (
-                    <Field key={level} label={level}>
-                      <Input
-                        className={`${cls.mono} ${cls.input}`}
-                        value={wire === null || wire === undefined ? '' : wire}
-                        placeholder={t('reasoning.unsupported')}
-                        aria-label={`${level} ${t('reasoning.wireValue')}`}
-                        disabled={disabled}
-                        spellCheck={false}
-                        onChange={(event) => {
-                          const raw = event.currentTarget.value
-                          const next = { ...(mapping as Record<string, string | null>) }
-                          // Blank clears the level: DSH pins an undeclared level
-                          // to null, which means "this model does not support it".
-                          if (raw === '') delete next[level]
-                          else next[level] = raw
-                          onModelField(index, 'reasoningEfforts', Object.keys(next).length === 0 ? undefined : next)
-                        }}
-                      />
-                    </Field>
-                  )
-                })}
-              </div>
-            )}
-          </Field>
-
-          {compatFieldsFor(props.protocol).length === 0 ? null : (
-            <Field label={t('compat.modelTitle')} hint={t('compat.modelDesc')}>
-              <CompatFieldGrid
-                t={t}
-                fields={compatFieldsFor(props.protocol)}
-                values={(model.compat ?? {}) as Record<string, unknown>}
-                disabled={disabled}
-                onChange={(key, value) => {
-                  onModelField(index, 'compat', withValue((model.compat ?? {}) as Record<string, unknown>, key, value))
-                }}
-              />
-            </Field>
-          )}
-        </div>
-      ) : null}
+      <Note>{t('models.providerOnly')}</Note>
     </div>
   )
 }
 
-/** Whether a stored input list claims image support. */
-function inputHasImage(input: readonly string[] | undefined): boolean {
-  return Array.isArray(input) && input.includes('image')
+/** How many of the per-model fields this entry sets. */
+function overrideCountOf(model: ProviderModelEntry): number {
+  return MANAGED_MODEL_KEYS.filter((field) => model[field] !== undefined).length
 }
 
 /** Map a stored `input` list onto one of the three editor choices. */

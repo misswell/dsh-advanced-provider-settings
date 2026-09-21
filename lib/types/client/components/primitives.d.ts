@@ -1,20 +1,54 @@
 /**
- * Small shared building blocks for the settings surface.
+ * Shared building blocks for the settings surface.
  *
  * Every control here is a thin wrapper over a `@deepseek-ai/dsh-client-ui-primitives`
  * component, so this plugin inherits the shell's focus, disabled and theming
  * behaviour instead of reimplementing it.
+ *
+ * The layout rule the whole file follows: one row is one setting. The row carries
+ * a label, at most one line of explanation, and exactly one control — so a value
+ * is never shown twice and a section reads top-to-bottom as a list of decisions
+ * rather than a stack of widgets.
  */
 import type { ReactNode } from 'react';
 import { type TagTone } from '@deepseek-ai/dsh-client-ui-primitives';
-import type { Translate } from '../contract.js';
 /** Tone of an inline notice. */
 export type NoticeTone = 'info' | 'warning' | 'danger' | 'success';
-/** Inline explanatory block. */
+/**
+ * Inline explanatory block.
+ *
+ * Reserved for the cases that need a box: a warning the user must act on, a
+ * danger that blocks saving, or the result of an action. Everything quieter is a
+ * {@link Note}, because a column of coloured rectangles has no hierarchy left.
+ */
 export declare function Notice(props: {
     tone: NoticeTone;
     title?: string;
     children?: ReactNode;
+}): ReactNode;
+/** One line of explanation, without the box. */
+export declare function Note(props: {
+    children: ReactNode;
+}): ReactNode;
+/**
+ * One setting: label and explanation on the left, one control on the right.
+ *
+ * `overridden` is the only status mark a row carries — an accent bar on its left
+ * edge. A word for it ("已覆盖") would repeat on most rows and say nothing a
+ * glance at the bar does not.
+ */
+export declare function Row(props: {
+    label: string;
+    /** The raw schema identifier, for matching against provider documentation. */
+    fieldKey?: string;
+    /** One line: what the setting does, and what it currently means. */
+    note?: ReactNode;
+    error?: ReactNode;
+    /** Whether this row's value is set here rather than inherited. */
+    overridden?: boolean;
+    /** Put the control on its own line under the label, for wide option lists. */
+    wide?: boolean;
+    children: ReactNode;
 }): ReactNode;
 /** Label, help text and validation message around one control. */
 export declare function Field(props: {
@@ -25,30 +59,22 @@ export declare function Field(props: {
     accessory?: ReactNode;
     children: ReactNode;
 }): ReactNode;
-/** A tag marking a field as explicitly overridden rather than inherited. */
-export declare function OverrideTag({ t, overridden }: {
-    t: Translate;
-    overridden: boolean;
-}): ReactNode;
 /**
- * Numeric field where empty means "inherit".
+ * A number with its unit inside the box, so the value needs no second echo.
  *
- * Kept as text rather than a number input so a partially typed value (a lone
- * minus sign, an empty box) does not get coerced into a write.
+ * Empty means "inherit", which is why the default is the placeholder: the box
+ * then says both what is set and what would be used otherwise, without a third
+ * line of prose.
  */
-export declare function NumberField(props: {
-    id: string;
-    label: string;
-    hint?: string | undefined;
-    error?: string | undefined;
+export declare function NumberBox(props: {
     value: number | undefined;
     placeholder?: string | undefined;
-    min?: number | undefined;
-    max?: number | undefined;
-    step?: number | undefined;
-    narrow?: boolean;
+    /** A unit label, or a control (a unit picker) to sit inside the box. */
+    unit?: ReactNode;
+    ariaLabel: string;
     disabled?: boolean | undefined;
-    accessory?: ReactNode;
+    /** Rejects a typed value that cannot be committed (a half-written object). */
+    parse?: ((raw: string) => number | undefined) | undefined;
     onChange: (next: number | undefined) => void;
 }): ReactNode;
 /** One option in a {@link ChoiceRow}. */
@@ -60,23 +86,23 @@ export interface ChoiceOption<T extends string> {
 /** A single-choice control rendered as pills. */
 export declare function ChoiceRow<T extends string>(props: {
     label: string;
-    hint?: string | undefined;
+    note?: ReactNode;
     value: T;
     options: readonly ChoiceOption<T>[];
     onChange: (next: T) => void;
-    accessory?: ReactNode;
     disabled?: boolean | undefined;
+    /** Force the options onto their own line. */
+    wide?: boolean;
+    /**
+     * Whether the choice is the user's rather than a fallback.
+     *
+     * Callers whose "inherit" pill is a named value like `inherit` have to say so
+     * here: `value !== ''` would mark an untouched row as overridden, and the bar
+     * is the one mark that claims "this is yours".
+     */
+    overridden?: boolean | undefined;
 }): ReactNode;
-/** A labelled boolean toggle. */
-export declare function ToggleField(props: {
-    label: string;
-    hint?: string | undefined;
-    checked: boolean;
-    disabled?: boolean;
-    title?: string | undefined;
-    onChange: (next: boolean) => void;
-}): ReactNode;
-/** A collapsible section with a status chip. */
+/** A collapsible section card: header row, then its rows. */
 export declare function SectionShell(props: {
     id: string;
     title: string;
@@ -92,10 +118,6 @@ export declare function SectionShell(props: {
 }): ReactNode;
 /** A row of actions. */
 export declare function Toolbar(props: {
-    children: ReactNode;
-}): ReactNode;
-/** A small monospace chip. */
-export declare function Mono(props: {
     children: ReactNode;
 }): ReactNode;
 /** Text button styled as a link, for destructive or secondary row actions. */

@@ -1,28 +1,21 @@
 /**
- * Visual affordances layered over the shell's own primitives.
+ * The few affordances that carry information no label can.
  *
- * These exist because the settings surface inherited from Harness is a form: a
- * column of labelled text inputs. A form tells you what a value *is* but not
- * what it *does* — whether you are looking at your own override or an inherited
- * default, what a duration means in milliseconds, or what a retry policy does
- * over time. Everything here answers one of those questions in the shape of the
- * data itself, and deliberately uses the shell's vocabulary (`StateDot`, `Pill`,
- * `Tag`) plus `--dsw-*` tokens so it reads as part of the product rather than a
- * panel bolted into it.
+ * The rule for anything added here: it must say something the row's label, its
+ * one line of note and its control do not. A second rendering of a value that is
+ * already on screen is not a visual aid, it is noise — which is why this file is
+ * short. What survives is the retry backoff (a sequence of five numbers is hard
+ * to read as numbers, easy to read as bars) and the two formatters, since
+ * `300000` and `20971520` mean nothing to a person and `5 min` / `20 MiB` do.
  */
 import type { ReactNode } from 'react';
 import type { Translate } from '../contract.js';
 /**
- * Whether a value is inherited from a broader layer or set here.
- *
- * Uses `StateDot` rather than a coloured word so a column of these can be
- * scanned vertically; the label carries the meaning for screen readers.
+ * Format a millisecond count the way a person would say it.
+ * @param ms - the duration in milliseconds.
+ * @param t - bound translate for the unit labels.
+ * @returns a short human duration, e.g. `2 min` or `500 ms`.
  */
-export declare function ValueSource({ t, overridden }: {
-    t: Translate;
-    overridden: boolean;
-}): ReactNode;
-/** Format a millisecond count the way a person would say it. */
 export declare function formatDuration(ms: number, t: Translate): string;
 /**
  * Format a byte count in binary units.
@@ -34,30 +27,16 @@ export declare function formatDuration(ms: number, t: Translate): string;
  */
 export declare function formatBytes(bytes: number, t: Translate): string;
 /**
- * A number that is usually left alone, with the inherited default made visible.
+ * The one reset affordance, shown only where there is something to reset.
  *
- * The problem this solves: a bare box with "1024" in a placeholder gives no
- * sense of scale, so you cannot tell whether 1024 is near the floor or the
- * ceiling. The slider shows the legal range, the tick shows where the inherited
- * default sits inside it, and the buttons say explicitly which one you are on.
+ * It is a text button rather than a row of status prose because the row already
+ * says what is set: the action is the useful part.
  */
-export declare function SliderField(props: {
+export declare function InheritButton(props: {
     t: Translate;
-    id: string;
-    label: string;
-    hint?: string | undefined;
-    error?: string | undefined;
-    /** `undefined` means inherit. */
-    value: number | undefined;
-    /** The value in force when nothing is set at this layer. */
-    inherited: number;
-    min: number;
-    max: number;
-    step?: number | undefined;
-    /** Unit-aware rendering of a value, e.g. `2 min` or `10 MB`. */
-    format: (value: number) => string;
+    overridden: boolean;
     disabled?: boolean | undefined;
-    onChange: (next: number | undefined) => void;
+    onInherit: () => void;
 }): ReactNode;
 /**
  * The retry backoff, drawn.
@@ -75,12 +54,8 @@ export declare function BackoffCurve(props: {
     maxMs?: number | undefined;
     factor?: number | undefined;
 }): ReactNode;
-export declare function EffortLadder({ t, level }: {
-    t: Translate;
-    level: string | false | undefined;
-}): ReactNode;
 /**
- * A labelled cluster of related flags.
+ * A labelled cluster heading inside a long list of flags.
  *
  * The 26 compat fields describe six different concerns; presented as one flat
  * list they are unreadable, so each cluster gets a heading and a count of how

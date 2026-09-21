@@ -2,14 +2,16 @@
 
 **Advanced Provider Settings** is a WebUI plugin for **DeepSeek Harness** (DSH) that turns the
 hidden half of an OpenAI-compatible provider into something you can see and edit. Instead of
-hand-editing `~/.dsh/settings.yaml`, you get a real control panel on every provider card for
-**Provider Settings** covering request **Headers**, **User-Agent** control, **Retry Policy**,
-**Timeout** and transport, **Vision** and image budgets, **Reasoning** and thinking levels,
-**Compatibility** flags, and per-model capabilities — all written through DeepSeek Harness's own
-revision-fenced settings transport, so your YAML keeps its comments and every field you never
-touched stays exactly as it was.
+hand-editing `~/.dsh/settings.yaml`, you get a real control panel — on its own settings page and on
+every provider card — and it is built around the **model**: pick one, then give it its own input
+modalities, reasoning-effort mapping and compatibility flags. Everything that can only apply to the
+provider as a whole — request **Headers**, **User-Agent** control, **Retry Policy**, **Timeout** and
+transport, **Vision** image budgets, **Reasoning** thinking levels, route-level **Compatibility**
+flags — sits in provider-level cards that each say why they are not on the model. All of it is
+written through DeepSeek Harness's own revision-fenced settings transport, so your YAML keeps its
+comments and every field you never touched stays exactly as it was.
 
-> **Status:** `v0.1.0`. Verified against DeepSeek Harness `0.1.5-rc.2`.
+> **Status:** `v0.2.0`. Verified against DeepSeek Harness `0.1.5-rc.2`.
 
 ---
 
@@ -44,19 +46,24 @@ adds UI through the Models page's **declared extension slots**, and it reads and
 
 ## What you can configure
 
-| Area | What you get |
-|---|---|
-| **Headers** | Per-provider and global request headers, with validation, secret masking and duplicate detection. |
-| **User-Agent** | Presets (Chrome, Safari, Firefox, opencode, Codex CLI, Claude CLI) plus free text, for gateways that whitelist clients. |
-| **Retry Policy** | Harness default / Conservative / Aggressive presets, or a custom policy: mode, max retries, retryable codes, initial delay, max delay, jitter. |
-| **Network** | Transport (`sse`, `websocket`, `websocket-cached`, `auto`), request timeout, stream idle timeout, WebSocket connect timeout, cache retention. |
-| **Vision** | Default input modalities, max image bytes per request, pixel budget, max bytes per image — with human units (MiB) instead of raw byte counts. |
-| **Reasoning** | Thinking level (`off` … `max`) and per-level token budgets. |
-| **Compatibility** | All 26 `compat` flags, filtered to the ones your route's protocol actually reads — with model-level editing filtered harder, because a mismatch there is a hard error in Harness. |
-| **Models** | Per-model input modalities, per-model reasoning-effort mapping, per-model compatibility overrides. |
-| **Test Provider** | Interrogates the endpoint's model list using the headers *currently in the form*, saved or not — the fastest way to prove a whitelist header works. |
-| **Effective configuration** | A preview of exactly what the provider will send, layer by layer, with sensitive values masked. |
-| **Diagnostics** | Read-only compatibility report you can paste into a bug report, plus one-click import from the retired `dsh-custom-provider-settings` plugin. |
+Configuration has two levels: a **model** setting is edited one model at a time, and a **provider**
+setting applies to every model on the route. That split is not a UI preference — it is the Harness
+schema, which accepts only `input`, `reasoningEfforts` and `compat` on a model entry and rejects
+anything else by name.
+
+| Area | Level | What you get |
+|---|---|---|
+| **Per model** | Model | For the model you select: what input it accepts (text / image), the reasoning-effort mapping it actually sends on the wire, and its `compat` overrides — each flag showing the route value it falls back to. |
+| **Headers** | Provider / global | Per-provider and global request headers, with validation, secret masking and duplicate detection. |
+| **User-Agent** | Global | Presets (Chrome, Safari, Firefox, opencode, Codex CLI, Claude CLI) plus free text, for gateways that whitelist clients. |
+| **Retry Policy** | Provider | Harness default / Conservative / Aggressive presets, or a custom policy: mode, max retries, retryable codes, initial delay, max delay, jitter. |
+| **Network** | Provider | Transport (`sse`, `websocket`, `websocket-cached`, `auto`), request timeout, stream idle timeout, WebSocket connect timeout, cache retention. |
+| **Vision** | Provider | The fallback input type for models that declare none, max image bytes per request, pixel budget, max bytes per image — with human units (MiB) instead of raw byte counts. |
+| **Reasoning** | Provider | Thinking level (`off` … `max`) and per-level token budgets. |
+| **Compatibility** | Provider | All 26 `compat` flags, filtered to the ones your route's protocol actually reads. The model-level half lives under *Per model* and is filtered harder, because a mismatch there is a hard error in Harness. |
+| **Test Provider** | Provider | Interrogates the endpoint's model list using the headers *currently in the form*, saved or not — the fastest way to prove a whitelist header works. |
+| **Effective configuration** | Provider | A preview of exactly what the provider will send, layer by layer, with sensitive values masked. |
+| **Diagnostics** | Global | Read-only compatibility report you can paste into a bug report, plus one-click import from the retired `dsh-custom-provider-settings` plugin. |
 
 ## Install
 
@@ -67,7 +74,7 @@ Requires DeepSeek Harness `0.1.5-rc.2` or a compatible build, and Node.js 20+.
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 
 # From a GitHub release tarball (a fixed, content-hashed artifact)
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.1.0/dsh-advanced-provider-settings-0.1.0.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.2.0/dsh-advanced-provider-settings-0.2.0.tgz
 
 # From npm, once published
 dsh plugin --profile web add dsh-advanced-provider-settings
@@ -97,25 +104,46 @@ the keys under `providers.<id>` in `~/.dsh/settings.yaml` by hand.
 
 ## Using it
 
-1. Open **Settings → Models**.
-2. Expand any OpenAI-compatible provider card. **Advanced Settings** appears under it.
-3. The panel opens on **what you have changed**: headers, plus every section that already carries an
-   override. Sections you have not touched stay collapsed, with a status chip in the header.
-4. Edit, then **Save**. Changes are written as path-addressed operations against the namespace
+1. Open **Settings → Provider Advanced**, expand **Provider configuration**, and pick a provider; or
+   open **Settings → Models** and expand any OpenAI-compatible provider card. Both surfaces edit the
+   same configuration.
+2. **Both disclosure levels start folded**: the three cards on the settings page (global headers,
+   provider configuration, diagnostics) and every section inside the editor. Each card header carries
+   its own status chip — `2 items`, `Always retrying`, `Custom`, `Default` — so you can see where
+   configuration lives, and how much, without opening anything, and expand only the card you came for.
+3. Edit, then **Save**. Changes are written as path-addressed operations against the namespace
    revision you were reading, so a concurrent edit is refused rather than silently clobbered.
-5. **Global headers** and diagnostics live on their own page: **Settings → Provider Advanced**.
+4. The **Provider Advanced** page also owns the two cross-provider surfaces: the **global header
+   list** every request carries, and diagnostics.
 
 ### Reading the controls
 
-- **A dot and a word** on each numeric field say whether the value is yours (`Overridden`) or
-  inherited (`Inherited`). **Reset to inherited** removes the override so the value tracks Harness
-  again instead of being pinned to today's number.
-- **Sliders** carry the legal range, and a tick on the track marks where the inherited default
-  sits. Durations read as `5 min` and image budgets as `10 MiB`, so a value that is off by a factor
-  of 1000 is visible rather than plausible.
-- **The effort ladder** shows the five thinking levels that reach the wire. `xhigh` and `max` are
-  accepted by the schema but folded to `high` before the request leaves, and the ladder says so
-  instead of offering a granularity that does not exist.
+- **Pick the model first.** The top of *Per model* is a row of model pills: an **IMG** mark means that
+  model declares image input, and a dot on the right means the model already carries overrides.
+  A filter box appears past 8 models. You edit one model at a time; the editor header shows its id
+  and offers *Clear every override on this model*.
+- **A control that is missing from the model is one Harness refuses.** A model entry accepts only
+  input modalities, the reasoning-effort mapping and `compat`, so headers, retry, network, image byte
+  budgets and cache retention appear at provider level only — and the model editor states that
+  boundary at its foot instead of offering buttons that would be rejected on save.
+- **One row is one setting.** A card holds its rows separated by a hairline, and each row is a label,
+  at most one line of explanation, and one control. A row whose value you set yourself carries an
+  accent bar on its left edge — that bar is the only per-field status mark, so a warning still stands
+  out from it.
+- **The unit lives inside the number box**, and the inherited default is the placeholder rather than a
+  second widget. **Inherit** appears only on a row that actually overrides something, and it removes
+  the override so the value tracks Harness again instead of being pinned to today's number.
+- **A model-level compatibility flag names what it inherits.** When the model does not override a
+  flag, its explanation ends with `Inherited from the route: Supported`, so you never have to switch
+  back to the provider-level list to compare.
+- **Durations and budgets are said out loud**: `2 min`, `5 min`, `10 MiB`. A value that is off by a
+  factor of 1000 stops looking plausible. The pixel budget is the one row that restates its own value,
+  because turning it into `≈ 1448 × 1448 pixels` says something the box cannot.
+- **A coloured box always means a decision is needed.** Explanatory prose is plain text; only warnings,
+  blocking errors and the result of an action get a fill.
+- **Thinking levels are pills, and the fold is stated in words.** `xhigh` and `max` are accepted by the
+  schema but folded to `high` before the request leaves, and the row says so rather than offering a
+  granularity that does not exist.
 - **The backoff curve** draws the retry policy: one bar per attempt, sized by the real delay, with
   the total wait. `4 retries, 500 ms, doubling, capped at 8 s` is a shape, and it is easier to
   sanity-check as one.
@@ -147,11 +175,15 @@ resolved. That is occasionally exactly what you want (a gateway that wants its o
 frequently a mystery ("my key stopped working"). The plugin reports it as a warning next to the
 header.
 
-### 3. Retry is per provider route, not per model
+### 3. Only three things are per-model, and retry is not one of them
 
-`retryPolicy` is configured on the route. There is no per-model retry, and there is no global
-retry. The plugin says so in the Retry section rather than letting you look for a control that
-does not exist.
+A model entry in Harness accepts `input`, `reasoningEfforts` and `compat` — nothing else.
+`retryPolicy`, headers, transport and timeouts, image byte budgets and cache retention are configured
+on the provider route; there is no per-model retry, and there is no global retry. This plugin shows
+that boundary instead of hiding it: *Per model* carries those three control groups and its footer
+states which fields are provider-wide, while every provider-level card says in its own description
+that the value applies to all models on the route. So you look for the boundary, rather than for a
+switch that Harness would reject.
 
 ## Compatibility matrix
 
@@ -249,6 +281,10 @@ docs/recon/    the source-level reconnaissance this implementation is based on
   as `deepseek` or `chat_template_kwargs` because that string is what the endpoint receives and
   what provider documentation names; translating it would break the correspondence. The field
   *names*, the groups they sit in, the option descriptions and every level are localized.
+- **A route with no `models` list has no per-model seat.** *Per model* edits the model list the route
+  declares for itself; a route served by the installed catalog uses a different channel in Harness,
+  `modelOverrides.<id>`, which covers the same three fields. This plugin has no UI for that yet, so on
+  such a route you either declare the models on the Models page or edit the YAML by hand.
 - **Provider failover is out of scope.** It is deliberately deferred and not attempted here.
 - **A package the loader cannot locate is skipped in silence.** If a plugin's `exports` map does
   not resolve, its browser half simply never loads — no error, no log, no diagnostic. This package

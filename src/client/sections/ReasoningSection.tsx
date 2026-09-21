@@ -4,14 +4,15 @@
  *
  * `xhigh` and `max` are offered as levels because the schema accepts them, with
  * a note that DSH folds both onto the `high` budget — otherwise a user setting
- * an `xhigh` budget of 128k would silently get 16k. The ladder makes that fold
- * visible instead of leaving it to a paragraph nobody reads.
+ * an `xhigh` budget of 128k would silently get 16k. The fold is stated once, in
+ * words, beside the control it applies to; a second picture of the same ladder
+ * would only repeat what the pills already say.
  */
 import type { ReactNode } from 'react'
 import { Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import { THINKING_BUDGET_LEVELS, THINKING_LEVELS } from '../../shared/capabilities.js'
-import { Field, Notice } from '../components/primitives.js'
-import { EffortLadder, SliderField } from '../components/visual.js'
+import { Note, NumberBox, Row } from '../components/primitives.js'
+import { InheritButton } from '../components/visual.js'
 import { cls } from '../styles.js'
 import type { Translate } from '../contract.js'
 import type { ProviderProfile } from '../../shared/types.js'
@@ -19,20 +20,12 @@ import type { ProviderProfile } from '../../shared/types.js'
 /** Budget levels that actually take effect; xhigh/max fold onto `high`. */
 const BUDGET_KEYS = THINKING_BUDGET_LEVELS
 
-/** The DeepSeek Harness defaults, shown as the inherited position on a slider. */
+/** The DeepSeek Harness defaults, shown as the placeholder. */
 const BUDGET_DEFAULTS: Readonly<Record<string, number>> = {
   minimal: 1024,
   low: 2048,
   medium: 8192,
   high: 16384,
-}
-
-/** Slider ceilings, generous enough to reach the largest budget a model takes. */
-const BUDGET_MAX: Readonly<Record<string, number>> = {
-  minimal: 8192,
-  low: 16384,
-  medium: 65536,
-  high: 131072,
 }
 
 /** Render the Reasoning section body. */
@@ -55,7 +48,12 @@ export function ReasoningSection(props: {
 
   return (
     <div className={cls.section}>
-      <Field label={t('reasoning.level')} hint={t('reasoning.levelDesc')}>
+      <Row
+        label={t('reasoning.level')}
+        note={t('reasoning.levelDesc')}
+        overridden={profile.reasoning !== undefined}
+        wide
+      >
         <div className={cls.tagList} role="radiogroup" aria-label={t('reasoning.level')}>
           {[
             { value: '', label: t('common.inherit'), title: t('common.inheritHint') },
@@ -66,7 +64,7 @@ export function ReasoningSection(props: {
             })),
           ].map((option) => (
             <Pill
-              key={option.value}
+              key={option.value || 'inherit'}
               active={(profile.reasoning ?? '') === option.value}
               role="radio"
               aria-checked={(profile.reasoning ?? '') === option.value}
@@ -78,34 +76,43 @@ export function ReasoningSection(props: {
             </Pill>
           ))}
         </div>
-      </Field>
+      </Row>
 
-      <EffortLadder t={t} level={profile.reasoning} />
+      <Note>{t('reasoning.foldsToHigh')}</Note>
 
-      <Field label={t('reasoning.budgets')} hint={t('reasoning.budgetsDesc')}>
-        <div className={cls.grid}>
-          {BUDGET_KEYS.map((level) => (
-            <SliderField
-              key={level}
-              t={t}
-              id={`aps-thinking-${level}`}
-              label={t(`reasoning.budget.${level}`)}
-              value={budgets[level]}
-              inherited={BUDGET_DEFAULTS[level] ?? 1024}
-              min={0}
-              max={BUDGET_MAX[level] ?? 65536}
-              step={256}
-              format={(value) => `${value} ${t('unit.tokens')}`}
+      {BUDGET_KEYS.map((level) => {
+        const label = t(`reasoning.budget.${level}`)
+        const value = budgets[level]
+        const fallback = BUDGET_DEFAULTS[level] ?? 1024
+        return (
+          <Row
+            key={level}
+            label={label}
+            note={value === undefined
+              ? t('field.defaultIs', { value: `${String(fallback)} ${t('unit.tokens')}` })
+              : undefined}
+            error={props.issues.get(`thinkingBudgets.${level}`)}
+            overridden={value !== undefined}
+          >
+            <NumberBox
+              value={value}
+              placeholder={String(fallback)}
+              unit={t('unit.tokens')}
+              ariaLabel={label}
               disabled={disabled}
-              error={props.issues.get(`thinkingBudgets.${level}`)}
               onChange={(next) => { setBudget(level, next) }}
             />
-          ))}
-        </div>
-      </Field>
+            <InheritButton
+              t={t}
+              overridden={value !== undefined}
+              disabled={disabled}
+              onInherit={() => { setBudget(level, undefined) }}
+            />
+          </Row>
+        )
+      })}
 
-      <Notice tone="info">{t('reasoning.foldsToHigh')}</Notice>
-      <span className={cls.hint}>{t('reasoning.levelsDesc')}</span>
+      <Note>{t('reasoning.budgetsDesc')}</Note>
     </div>
   )
 }

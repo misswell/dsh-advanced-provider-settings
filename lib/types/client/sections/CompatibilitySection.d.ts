@@ -41,6 +41,11 @@ export declare function groupCompatFields(fields: readonly CompatFieldDef[]): re
  *
  * A filter box appears only once the list is long enough to need one; the
  * point of the grouping is that most users never need it.
+ *
+ * `inheritedValues` is what the same flag resolves to one level up — the route
+ * for a model-level grid, nothing for a route-level one. Showing it is what
+ * makes "Inherit" a decision rather than a blank: without it, per-model editing
+ * is guesswork about which of the two levels a value comes from.
  */
 export declare function CompatFieldGrid(props: {
     t: Translate;
@@ -48,6 +53,10 @@ export declare function CompatFieldGrid(props: {
     values: Record<string, unknown>;
     disabled: boolean;
     onChange: (key: string, value: unknown) => void;
+    /** Where an un-overridden flag actually takes its value from. */
+    inheritedValues?: Record<string, unknown> | undefined;
+    /** Names the level the un-overridden value comes from. */
+    inheritedFrom?: string | undefined;
 }): ReactNode;
 /**
  * One flag: what it means on the left, how it is set on the right.
@@ -55,6 +64,10 @@ export declare function CompatFieldGrid(props: {
  * A boolean keeps three states rather than two. "Inherit" is not the same as
  * "off" — it leaves the decision to the adapter — so a two-position switch
  * would show a value the plugin cannot actually know.
+ *
+ * When the flag is not set here but IS set one level up, the row says what the
+ * inherited value reads as. That is the difference between an inherited column
+ * you can audit and a column of blanks.
  */
 export declare function CompatFlagRow(props: {
     t: Translate;
@@ -62,6 +75,17 @@ export declare function CompatFlagRow(props: {
     value: unknown;
     disabled: boolean;
     onChange: (next: unknown) => void;
+    /** The same flag at the level below this one in precedence. */
+    inherited?: unknown;
+    /** Where `inherited` comes from, e.g. "route level". */
+    inheritedFrom?: string | undefined;
 }): ReactNode;
+/**
+ * How one compat value reads in prose, for the "inherited" line.
+ *
+ * Deliberately not the raw wire value: `supportsStore: true` is written as
+ * "supported" because that is the question the flag answers.
+ */
+export declare function describeCompatValue(t: Translate, field: CompatFieldDef, value: unknown): string;
 /** Return a copy of a compat record with one key set or removed. */
 export declare function withValue(record: Record<string, unknown>, key: string, value: unknown): Record<string, unknown> | undefined;

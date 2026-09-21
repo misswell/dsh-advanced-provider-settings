@@ -11,7 +11,8 @@ import { useMemo, type ReactNode } from 'react'
 import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { buildPreview } from '../../shared/summary.js'
 import { cls } from '../styles.js'
-import { Notice } from '../components/primitives.js'
+import { Note, Notice } from '../components/primitives.js'
+import { formatDuration } from '../components/visual.js'
 import type { Translate } from '../contract.js'
 import type { ProviderProfile } from '../../shared/types.js'
 
@@ -43,10 +44,8 @@ export function PreviewSection(props: {
 
   return (
     <div className={cls.section}>
-      <p className={cls.hint} style={{ margin: 0 }}>{t('preview.desc')}</p>
-
       {lines.length === 0 && (effective?.headers.length ?? 0) === 0 ? (
-        <Notice tone="info">{t('preview.empty')}</Notice>
+        <Note>{t('preview.empty')}</Note>
       ) : null}
 
       {loading && effective === undefined ? <span className={cls.hint}>{t('common.loading')}</span> : null}
@@ -55,8 +54,10 @@ export function PreviewSection(props: {
         <div className={cls.preview}>
           {lines.map((line) => (
             <div className={cls.previewLine} key={line.key}>
-              <span className={cls.previewKey}>{t(`preview.key.${line.key}`)}</span>
-              <span className={cls.previewValue}>{line.value}</span>
+              <span className={cls.previewKey}>{t(line.labelKey)}</span>
+              <span className={cls.previewValue}>
+                {line.format === 'duration' ? formatDuration(Number(line.value), t) : line.value}
+              </span>
             </div>
           ))}
         </div>

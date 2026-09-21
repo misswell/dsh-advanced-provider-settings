@@ -6,7 +6,7 @@
  * The projection returns structured facts, never sentences — every string the
  * user reads comes from the locale files.
  */
-import { COMPAT_FIELDS } from './capabilities.js'
+import { COMPAT_FIELDS, MANAGED_MODEL_KEYS } from './capabilities.js'
 import { matchRetryPreset } from './retry.js'
 import type { ProviderProfile } from './types.js'
 import { claimsImageSupport } from './vision.js'
@@ -73,47 +73,6 @@ export function visionModelCount(profile: ProviderProfile): number {
 /** Whether the provider default declares image input. */
 export function providerClaimsImages(profile: ProviderProfile): boolean {
   return claimsImageSupport(profile.defaultInput)
-}
-
-/**
- * A panel section id. These differ from summary ids where two summaries share a
- * single editor: `timeout` and `transport` are both edited in the Network
- * section, because a transport is only meaningful next to its timeouts.
- */
-export type PanelSectionId = 'headers' | 'retry' | 'network' | 'vision' | 'reasoning' | 'compat' | 'models'
-
-/** Which panel section edits each summary. */
-const PANEL_OF: Readonly<Record<AdvancedSectionId, PanelSectionId>> = {
-  headers: 'headers',
-  retry: 'retry',
-  timeout: 'network',
-  transport: 'network',
-  vision: 'vision',
-  reasoning: 'reasoning',
-  compatibility: 'compat',
-  models: 'models',
-}
-
-/**
- * The sections to open when the panel first mounts.
- *
- * Headers always, because it is the most-used editor — and then every section
- * that already carries an override. Opening on what you changed is the whole
- * point: a panel that starts fully collapsed makes you click through rows to
- * find the field you came back to edit, and hides the fact that anything is
- * configured at all.
- *
- * @param profile - the profile as read.
- * @returns panel section ids, in display order.
- */
-export function initiallyExpandedSections(profile: ProviderProfile): readonly PanelSectionId[] {
-  const ids: PanelSectionId[] = ['headers']
-  for (const section of summarizeSections(profile)) {
-    if (section.status.kind === 'default') continue
-    const panel = PANEL_OF[section.id]
-    if (!ids.includes(panel)) ids.push(panel)
-  }
-  return ids
 }
 
 /**
@@ -206,16 +165,24 @@ function compatStatus(profile: ProviderProfile): SectionStatus {
 /** Models: how many entries carry a plugin-managed override. */
 function modelsStatus(profile: ProviderProfile): SectionStatus {
   const models = Array.isArray(profile.models) ? profile.models : []
-  const count = models.filter(
-    (model) => model.input !== undefined || model.reasoningEfforts !== undefined,
+  const count = models.filter((model) =>
+    MANAGED_MODEL_KEYS.some((field) => model[field] !== undefined),
   ).length
   return count === 0 ? { kind: 'default' } : { kind: 'count', count }
 }
 
 /** One line of the Effective Configuration preview. */
 export interface PreviewLine {
-  /** Stable key for the label lookup. */
+  /** Stable key for this line. */
   key: string
+  /**
+   * Dictionary entry naming this line. Compat lines point straight at the flag's
+   * own label rather than a second copy of it under `preview.`, which is how a
+   * flag added to the table gets a preview name for free.
+   */
+  labelKey: string
+  /** How the value should be read back to the user. */
+  format: 'text' | 'duration'
   /** Already-formatted value; numbers and short identifiers only. */
   value: string
 }
@@ -229,53 +196,58 @@ export interface PreviewLine {
 export function buildPreview(profile: ProviderProfile): PreviewLine[] {
   const lines: PreviewLine[] = []
 
+  /** A line whose label lives in the `preview.key.*` block. */
+  const line = (key: string, value: string, format: PreviewLine['format'] = 'text'): void => {
+    lines.push({ key, labelKey: `preview.key.${key}`, format, value })
+  }
+
   const headerCount = profile.headers === undefined ? 0 : Object.keys(profile.headers).length
-  if (headerCount > 0) lines.push({ key: 'headers', value: String(headerCount) })
+  if (headerCount > 0) line('headers', String(headerCount))
 
   if (profile.retryPolicy !== undefined) {
     const policy = profile.retryPolicy
-    lines.push({
-      key: 'retry',
-      value:
-        policy.mode === 'always'
-          ? 'always'
-          : `normal · ${String(policy.maxRetries ?? 5)}`,
-    })
+    line(
+      'retry',
+      policy.mode === 'always'
+        ? 'always'
+        : `normal · ${String(policy.maxRetries ?? 5)}`,
+    )
   }
 
-  if (profile.transport !== undefined) lines.push({ key: 'transport', value: String(profile.transport) })
-  if (profile.cacheRetention !== undefined) {
-    lines.push({ key: 'cacheRetention', value: String(profile.cacheRetention) })
-  }
+  if (profile.transport !== undefined) line('transport', String(profile.transport))
+  if (profile.cacheRetention !== undefined) line('cacheRetention', String(profile.cacheRetention))
 
-  const timeouts: string[] = []
-  if (profile.timeoutMs !== undefined) timeouts.push(`http ${String(profile.timeoutMs)}ms`)
+  if (profile.timeoutMs !== undefined) line('timeoutHttp', String(profile.timeoutMs), 'duration')
   if (profile.streamIdleTimeoutMs !== undefined) {
-    timeouts.push(`idle ${String(profile.streamIdleTimeoutMs)}ms`)
+    line('timeoutIdle', String(profile.streamIdleTimeoutMs), 'duration')
   }
   if (profile.websocketConnectTimeoutMs !== undefined) {
-    timeouts.push(`ws ${String(profile.websocketConnectTimeoutMs)}ms`)
+    line('timeoutWebsocket', String(profile.websocketConnectTimeoutMs), 'duration')
   }
-  if (timeouts.length > 0) lines.push({ key: 'timeout', value: timeouts.join(' · ') })
 
   const vision = visionModelCount(profile)
-  if (vision > 0) lines.push({ key: 'vision', value: String(vision) })
-  if (providerClaimsImages(profile)) lines.push({ key: 'defaultInput', value: 'text+image' })
+  if (vision > 0) line('vision', String(vision))
+  if (providerClaimsImages(profile)) line('defaultInput', 'text+image')
 
-  if (profile.reasoning !== undefined) lines.push({ key: 'reasoning', value: profile.reasoning })
+  if (profile.reasoning !== undefined) line('reasoning', profile.reasoning)
 
   const compat = profile.compat
   if (compat !== undefined && compat !== null && typeof compat === 'object') {
     for (const field of COMPAT_FIELDS) {
       const value = (compat as Record<string, unknown>)[field.key]
       if (value === undefined) continue
-      lines.push({ key: `compat.${field.key}`, value: formatCompatValue(value) })
+      lines.push({
+        key: `compat.${field.key}`,
+        labelKey: `compat.f.${field.key}.label`,
+        format: 'text',
+        value: formatCompatValue(value),
+      })
     }
   }
 
   const models = Array.isArray(profile.models) ? profile.models : []
   const overridden = models.filter((model) => model.reasoningEfforts !== undefined).length
-  if (overridden > 0) lines.push({ key: 'reasoningEfforts', value: String(overridden) })
+  if (overridden > 0) line('reasoningEfforts', String(overridden))
 
   return lines
 }

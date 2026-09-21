@@ -11,6 +11,7 @@ import {
   applyOps,
   diffGlobalHeaders,
   diffManagedModelFields,
+  diffManagedProviderConfig,
   diffManagedProviderFields,
   diffStringRecord,
   jsonEqual,
@@ -139,6 +140,28 @@ describe('diffManagedModelFields', () => {
     )
     expect(ops).toEqual([])
   })
+
+  it('writes a per-model compat override and unsets it again on Inherit', () => {
+    const set = diffManagedModelFields('example', 0, { id: 'm' }, { id: 'm', compat: { supportsStore: false } })
+    expect(set).toEqual([
+      { op: 'set', path: ['providers', 'example', 'models', '0', 'compat'], value: { supportsStore: false } },
+    ])
+    const unset = diffManagedModelFields(
+      'example',
+      0,
+      { id: 'm', compat: { supportsStore: false } },
+      { id: 'm' },
+    )
+    expect(unset).toEqual([{ op: 'unset', path: ['providers', 'example', 'models', '0', 'compat'] }])
+  })
+
+  it('carries per-model compat through the whole-config diff a save uses', () => {
+    const before: ProviderProfile = { models: [{ id: 'm' }] }
+    const after: ProviderProfile = { models: [{ id: 'm', compat: { thinkingFormat: 'deepseek' } }] }
+    const patched = applyOps({ providers: { example: before } }, diffManagedProviderConfig('example', before, after))
+    const profile = (patched.providers as Record<string, ProviderProfile>)['example']!
+    expect(profile.models?.[0]?.compat).toEqual({ thinkingFormat: 'deepseek' })
+  })
 })
 
 describe('resetProviderFields / resetAllAdvanced', () => {
@@ -153,7 +176,7 @@ describe('resetProviderFields / resetAllAdvanced', () => {
     retryPolicy: { mode: 'always' },
     compat: { supportsStore: true },
     models: [
-      { id: 'm1', name: 'm1', contextWindow: 100, maxTokens: 10, input: ['text', 'image'], reasoningEfforts: { low: 'low' } },
+      { id: 'm1', name: 'm1', contextWindow: 100, maxTokens: 10, input: ['text', 'image'], reasoningEfforts: { low: 'low' }, compat: { supportsStore: false } },
       { id: 'm2', name: 'm2' },
     ],
     unknownTop: { nested: true },
@@ -179,6 +202,7 @@ describe('resetProviderFields / resetAllAdvanced', () => {
     expect(paths).toContain('providers.example.compat')
     expect(paths).toContain('providers.example.models.0.input')
     expect(paths).toContain('providers.example.models.0.reasoningEfforts')
+    expect(paths).toContain('providers.example.models.0.compat')
 
     for (const path of paths) {
       expect(path).not.toContain('baseURL')

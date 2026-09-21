@@ -45,6 +45,15 @@ const CLIENT_STATIC_MODULES = [
 
 const watch = process.argv.includes('--watch')
 
+// `PLUGIN_VERSION` is what the diagnostics panel reports as the installed
+// version, so a release whose two numbers disagree misinforms the one person
+// filing the bug report.
+const capabilities = await readFile(resolve(root, 'src/shared/capabilities.ts'), 'utf8')
+const declaredVersion = /export const PLUGIN_VERSION = '([^']+)'/.exec(capabilities)?.[1]
+if (declaredVersion !== pkg.version) {
+  throw new Error(`PLUGIN_VERSION (${declaredVersion ?? 'missing'}) does not match package.json (${pkg.version})`)
+}
+
 await rm(resolve(root, 'lib'), { recursive: true, force: true })
 await mkdir(resolve(root, 'lib'), { recursive: true })
 

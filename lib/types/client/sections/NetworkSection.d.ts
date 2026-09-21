@@ -6,10 +6,9 @@
  * profile that fails to load. The section says so instead of staying silent,
  * because a user migrating from a hand-written YAML is likely looking for them.
  *
- * Durations are the reason this section uses sliders. `300000` is a number
- * nobody can read at a glance, and the schema's ceiling is 2147483647 — a value
- * that looks unremarkable while being about 24 days. Rendering the same value as
- * "5 min" against a visible range removes the most common way to misconfigure a
+ * Durations are shown as the number the schema stores plus its human form on the
+ * same line. `300000` is a number nobody can read at a glance, and rendering it
+ * as "5 min" beside the box removes the most common way to misconfigure a
  * timeout: being off by a factor of 1000.
  */
 import type { ReactNode } from 'react';

@@ -30,3 +30,18 @@ export declare function createProviderCardSeat(ctx: ClientContext): (props: Prov
 export declare function ProviderAdvancedSettings(props: ProviderCardSeatProps & {
     ctx: ClientContext;
 }): ReactNode;
+/**
+ * The same editor, mounted somewhere that owns its own provider selection.
+ *
+ * `embedded` drops the card's disclosure chrome: the host surface has already
+ * decided which provider is on screen, so the body renders directly and starts
+ * expanded.
+ */
+export declare function ProviderAdvancedEditor(props: {
+    ctx: ClientContext;
+    providerId: string;
+    configured?: boolean;
+    embedded?: boolean;
+    /** Reports unsaved edits so the host can refuse to switch providers. */
+    onDirtyChange?: (dirty: boolean) => void;
+}): ReactNode;

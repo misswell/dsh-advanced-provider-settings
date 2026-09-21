@@ -1,10 +1,10 @@
 /**
  * The Settings → "Provider Advanced" page (spec sections 42, 55, 50).
  *
- * This page owns the one piece of configuration that has no provider to hang
- * off: the global request header list. It also carries diagnostics, the legacy
- * migration prompt, and a read-only roll-up of what each provider resolves to —
- * all of which are cross-provider questions that no provider card can answer.
+ * This page owns the two things no provider card can answer: the global request
+ * header list that applies to every route, and a per-provider editor reached
+ * without hunting through the Models page. Diagnostics and the legacy migration
+ * prompt ride along because they are cross-provider questions.
  */
 import { type ReactNode } from 'react';
 import type { ClientContext } from './contract.js';
@@ -23,4 +23,20 @@ export declare function createGlobalSeat(ctx: ClientContext): () => ReactNode;
  */
 export declare function GlobalSettingsPage(props: {
     ctx: ClientContext;
+}): ReactNode;
+/**
+ * Which provider the editor below is configured for.
+ *
+ * A row of pills rather than a dropdown because the roster is short and the
+ * choice is the page's main action.
+ */
+export declare function ProviderPicker(props: {
+    label: string;
+    providers: readonly (readonly [string, {
+        displayName?: string;
+    }])[];
+    active: string;
+    /** An unsaved draft belongs to one provider, so another choice is refused. */
+    refuseSwitch: boolean;
+    onSelect: (providerId: string) => void;
 }): ReactNode;

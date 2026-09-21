@@ -59,25 +59,6 @@ export declare function visionModelCount(profile: ProviderProfile): number;
 /** Whether the provider default declares image input. */
 export declare function providerClaimsImages(profile: ProviderProfile): boolean;
 /**
- * A panel section id. These differ from summary ids where two summaries share a
- * single editor: `timeout` and `transport` are both edited in the Network
- * section, because a transport is only meaningful next to its timeouts.
- */
-export type PanelSectionId = 'headers' | 'retry' | 'network' | 'vision' | 'reasoning' | 'compat' | 'models';
-/**
- * The sections to open when the panel first mounts.
- *
- * Headers always, because it is the most-used editor — and then every section
- * that already carries an override. Opening on what you changed is the whole
- * point: a panel that starts fully collapsed makes you click through rows to
- * find the field you came back to edit, and hides the fact that anything is
- * configured at all.
- *
- * @param profile - the profile as read.
- * @returns panel section ids, in display order.
- */
-export declare function initiallyExpandedSections(profile: ProviderProfile): readonly PanelSectionId[];
-/**
  * Whether any plugin-managed key is set on the profile or its models.
  * @param profile - the profile as read.
  * @returns whether anything is configured.
@@ -91,8 +72,16 @@ export declare function hasAnyAdvanced(profile: ProviderProfile): boolean;
 export declare function summarizeSections(profile: ProviderProfile): SectionSummary[];
 /** One line of the Effective Configuration preview. */
 export interface PreviewLine {
-    /** Stable key for the label lookup. */
+    /** Stable key for this line. */
     key: string;
+    /**
+     * Dictionary entry naming this line. Compat lines point straight at the flag's
+     * own label rather than a second copy of it under `preview.`, which is how a
+     * flag added to the table gets a preview name for free.
+     */
+    labelKey: string;
+    /** How the value should be read back to the user. */
+    format: 'text' | 'duration';
     /** Already-formatted value; numbers and short identifiers only. */
     value: string;
 }

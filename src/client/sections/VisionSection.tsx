@@ -10,9 +10,8 @@
  */
 import type { ReactNode } from 'react'
 import { BYTE_UNITS, IMAGE_LIMIT_DEFAULTS, describePixelBudget, fromBytes, toBytes, validateImageLimit, type ByteUnit } from '../../shared/vision.js'
-import { Button, Input, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
-import { ChoiceRow, Field, Notice } from '../components/primitives.js'
-import { formatBytes } from '../components/visual.js'
+import { ChoiceRow, Note, NumberBox, Row } from '../components/primitives.js'
+import { InheritButton, formatBytes } from '../components/visual.js'
 import { cls } from '../styles.js'
 import type { Translate } from '../contract.js'
 import type { ProviderProfile } from '../../shared/types.js'
@@ -46,8 +45,9 @@ export function VisionSection(props: {
     <div className={cls.section}>
       <ChoiceRow
         label={t('vision.defaultInput')}
-        hint={t('vision.defaultInputDesc')}
+        note={t('vision.defaultInputDesc')}
         value={inputChoiceOf(profile.defaultInput)}
+        overridden={profile.defaultInput !== undefined}
         disabled={disabled}
         options={[
           { value: 'inherit', label: t('common.inherit'), title: t('common.inheritHint') },
@@ -59,90 +59,71 @@ export function VisionSection(props: {
         }}
       />
 
-      <Field label={t('vision.imageLimits')} hint={t('vision.imageLimitsDesc')}>
-        <div className={cls.grid}>
-          {LIMITS.map((spec) => {
-            const current = profile[spec.field]
-            const fromDefault = IMAGE_LIMIT_DEFAULTS[spec.field]
-            const source = current ?? fromDefault
-            const display = fromBytes(source)
-            const error = props.issues.get(spec.field) ?? validateImageLimit(source) ?? undefined
-            return (
-              <Field
-                key={spec.field}
-                label={t(spec.labelKey)}
-                error={error ?? undefined}
-                hint={spec.pixels === true
-                  ? `${formatBytes(source, t)} — ${t('vision.pixelBudgetHint', { size: describePixelBudget(source) })}`
-                  : formatBytes(source, t)}
-                accessory={current === undefined ? <Tag tone="quiet">{t('preview.inherited')}</Tag> : <Tag tone="info">{t('status.custom')}</Tag>}
-              >
-                <div className={cls.fieldRow}>
-                  <Input
-                    className={`${cls.mono} ${cls.inputNarrow}`}
-                    type="text"
-                    inputMode="numeric"
-                    aria-label={t(spec.labelKey)}
-                    disabled={disabled}
-                    value={String(display.value)}
-                    onChange={(event) => {
-                      const raw = event.currentTarget.value.trim()
-                      if (raw === '') {
-                        onChange(spec.field, undefined)
-                        return
-                      }
-                      if (!/^\d+$/.test(raw)) return
-                      const bytes = toBytes(Number(raw), display.unit)
-                      if (bytes === undefined) return
-                      onChange(spec.field, bytes)
-                    }}
-                  />
-                  <select
-                    className={cls.mono}
-                    aria-label={`${t(spec.labelKey)} unit`}
-                    disabled={disabled}
-                    value={display.unit}
-                    style={{ background: 'transparent', color: 'inherit', border: '1px solid var(--dsw-border-1,rgba(128,128,128,.35))', borderRadius: 6, padding: '5px 6px' }}
-                    onChange={(event) => {
-                      const unit = event.currentTarget.value as ByteUnit
-                      const bytes = toBytes(display.value, unit)
-                      if (bytes !== undefined) onChange(spec.field, bytes)
-                    }}
-                  >
-                    {BYTE_UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
-                  </select>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={disabled || current === undefined}
-                    title={t('common.inheritHint')}
-                    onClick={() => { onChange(spec.field, undefined) }}
-                  >
-                    {t('common.inherit')}
-                  </Button>
-                </div>
-              </Field>
-            )
-          })}
-        </div>
-      </Field>
+      <Note>{t('vision.imageLimitsDesc')}</Note>
 
-      <ul className={cls.hint} style={{ margin: 0, paddingLeft: 18 }}>
-        {LIMITS.map((spec) => (
-          <li key={spec.field}>
-            {t(spec.labelKey)}: {defaultBytesLabel(spec)}
-          </li>
-        ))}
-      </ul>
+      {LIMITS.map((spec) => {
+        const label = t(spec.labelKey)
+        const current = profile[spec.field]
+        const fallback = IMAGE_LIMIT_DEFAULTS[spec.field]
+        const shown = current ?? fallback
+        const display = fromBytes(shown)
+        const bytes = (raw: string): number | undefined => {
+          if (!/^\d+$/.test(raw)) return undefined
+          return toBytes(Number(raw), display.unit)
+        }
+        const error = props.issues.get(spec.field) ?? validateImageLimit(shown) ?? undefined
+        // The box already reads "2 MiB", so restating it would be a second
+        // picture of the same number. Only the pixel row has something the box
+        // cannot show: what that budget works out to in pixels.
+        const human = formatBytes(shown, t)
+        const equivalent = spec.pixels === true
+          ? `${human} · ${t('vision.pixelBudgetHint', { size: describePixelBudget(shown) })}`
+          : human
+        return (
+          <Row
+            key={spec.field}
+            label={label}
+            note={current === undefined
+              ? t('field.defaultIs', { value: equivalent })
+              : (spec.pixels === true ? equivalent : undefined)}
+            error={error}
+            overridden={current !== undefined}
+          >
+            <NumberBox
+              value={display.value}
+              placeholder={String(fromBytes(fallback).value)}
+              ariaLabel={label}
+              disabled={disabled}
+              parse={bytes}
+              unit={(
+                <select
+                  aria-label={`${label} unit`}
+                  disabled={disabled}
+                  value={display.unit}
+                  onChange={(event) => {
+                    const unit = event.currentTarget.value as ByteUnit
+                    const next = toBytes(display.value, unit)
+                    if (next !== undefined) onChange(spec.field, next)
+                  }}
+                >
+                  {BYTE_UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                </select>
+              )}
+              onChange={(next) => { onChange(spec.field, next) }}
+            />
+            <InheritButton
+              t={t}
+              overridden={current !== undefined}
+              disabled={disabled}
+              onInherit={() => { onChange(spec.field, undefined) }}
+            />
+          </Row>
+        )
+      })}
 
-      <Notice tone="info">{t('vision.modelsDesc')}</Notice>
+      <Note>{t('vision.modelsDesc')}</Note>
     </div>
   )
-}
-
-/** Default value label for one limit, so the placeholder is explained in text. */
-function defaultBytesLabel(spec: LimitSpec): string {
-  return `${String(IMAGE_LIMIT_DEFAULTS[spec.field])} (${String(fromBytes(IMAGE_LIMIT_DEFAULTS[spec.field]).value)} ${fromBytes(IMAGE_LIMIT_DEFAULTS[spec.field]).unit})`
 }
 
 /** Map a stored `input` list onto one of the three editor choices. */

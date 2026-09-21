@@ -21,7 +21,7 @@ import {
   validateRetryPolicy,
   type RetryEditorState,
 } from '../shared/retry.js'
-import { initiallyExpandedSections, summarizeSections, type SectionSummary } from '../shared/summary.js'
+import { summarizeSections, type SectionSummary } from '../shared/summary.js'
 import { cls } from './styles.js'
 import { useProviderDraft, type SaveOutcome } from './draft.js'
 import { useOwnScope, useProviderScope, useRpc, useRpcQuery, useSettingsSnapshot, useTranslate } from './hooks.js'
@@ -64,27 +64,60 @@ export function ProviderAdvancedSettings(props: ProviderCardSeatProps & { ctx: C
   // where a different namespace's card is rendered with our entry key.
   if (provider.settingsNs !== PROVIDER_NAMESPACE) return null
 
-  return <Panel t={t} ctx={ctx} provider={provider} configured={configured} />
+  return <Panel t={t} ctx={ctx} providerId={provider.provider} configured={configured} />
+}
+
+/**
+ * The same editor, mounted somewhere that owns its own provider selection.
+ *
+ * `embedded` drops the card's disclosure chrome: the host surface has already
+ * decided which provider is on screen, so the body renders directly and starts
+ * expanded.
+ */
+export function ProviderAdvancedEditor(props: {
+  ctx: ClientContext
+  providerId: string
+  configured?: boolean
+  embedded?: boolean
+  /** Reports unsaved edits so the host can refuse to switch providers. */
+  onDirtyChange?: (dirty: boolean) => void
+}): ReactNode {
+  const t = useTranslate(props.ctx)
+  return (
+    <Panel
+      t={t}
+      ctx={props.ctx}
+      providerId={props.providerId}
+      configured={props.configured ?? true}
+      embedded={props.embedded === true}
+      onDirtyChange={props.onDirtyChange}
+    />
+  )
 }
 
 /** The panel proper. Split out so hooks run only for the matching namespace. */
 function Panel(props: {
   t: Translate
   ctx: ClientContext
-  provider: ProviderDirectoryEntry
+  providerId: string
   configured: boolean
+  embedded?: boolean
+  onDirtyChange?: ((dirty: boolean) => void) | undefined
 }): ReactNode {
-  const { t, ctx, provider } = props
-  const providerId = provider.provider
+  const { t, ctx, providerId, embedded, onDirtyChange } = props
 
   const scope = useProviderScope(ctx)
   const draft = useProviderDraft(scope, providerId)
   const ownScope = useOwnScope(ctx)
   const own = useSettingsSnapshot(ownScope)
 
-  const [open, setOpen] = useState(false)
-  // Seeded from the committed profile: see `initiallyExpandedSections`.
-  const [expanded, setExpanded] = useState<readonly string[]>(() => [...initiallyExpandedSections(draft.committed)])
+  // An embedded panel has no disclosure of its own — the host surface already
+  // picked which provider is on screen.
+  const [open, setOpen] = useState(embedded === true)
+  // Nothing opens on its own: every section header already carries the badge
+  // that says what is configured there ("2 项", "无限重试"), so the panel arrives
+  // as a list of answers and you expand only the one you came for.
+  const [expanded, setExpanded] = useState<readonly string[]>([])
   const [headers, setHeaders] = useState<HeaderEntry[]>(() => headerEntriesOf(draft.committed.headers))
   const [retryState, setRetryState] = useState(() => toRetryEditorState(draft.committed.retryPolicy))
   const [alwaysAck, setAlwaysAck] = useState(false)
@@ -103,23 +136,29 @@ function Panel(props: {
   // `ui.advancedExpanded` is the persisted "starts expanded" preference. It is
   // applied once, on the first snapshot that arrives: re-applying it later would
   // fight the user's own toggling every time an unrelated settings write bumped
-  // the revision.
+  // the revision. An embedded panel is always open, so the preference is the
+  // card's alone.
   const hydrated = useRef(false)
   useEffect(() => {
+    if (embedded === true) return
     if (hydrated.current || own.status !== 'ready') return
     hydrated.current = true
     if (own.value?.ui?.advancedExpanded === true) setOpen(true)
-  }, [own])
+  }, [own, embedded])
+
+  // The host owns the provider switch, so it needs to know an edit is unsaved:
+  // switching would otherwise drop the draft without a word.
+  useEffect(() => { onDirtyChange?.(draft.dirty) }, [draft.dirty, onDirtyChange])
 
   const persistOpen = useCallback((next: boolean): void => {
     setOpen(next)
-    if (ownScope === undefined) return
+    if (embedded === true || ownScope === undefined) return
     // A UI preference is not worth blocking the panel over, and it is not
     // provider configuration: a failed write costs a remembered toggle.
     void ownScope
       .mutate([{ op: 'set', path: ['ui', 'advancedExpanded'], value: next }], ownScope.getSnapshot().revision)
       .catch(() => undefined)
-  }, [ownScope])
+  }, [ownScope, embedded])
 
   const summaries = useMemo(() => summarizeSections(profile), [profile])
   const summaryById = useMemo(
@@ -209,37 +248,55 @@ function Panel(props: {
 
   return (
     <div className={cls.root}>
-      <div className={cls.shell}>
-        <div
-          className={cls.shellHeader}
-          role="button"
-          tabIndex={0}
-          aria-expanded={open}
-          onClick={() => { persistOpen(!open) }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-              persistOpen(!open)
-            }
-          }}
-        >
-          <span className={cls.shellChevron} data-open={open}>▶</span>
-          <span className={cls.shellTitle}>{t('plugin.title')}</span>
-          {displaySummaries.length > 0 ? (
-            displaySummaries.slice(0, 4).map((summary) => (
-              <Tag key={summary.key} tone={summary.tone}>
-                {`${summary.label}: ${summary.badge ?? ''}`}
-              </Tag>
-            ))
-          ) : (
-            <Tag tone="quiet">{t('plugin.summaryDefault')}</Tag>
-          )}
-        </div>
+      <div className={embedded === true ? cls.embedded : cls.shell}>
+        {embedded === true ? null : (
+          <div
+            className={cls.shellHeader}
+            role="button"
+            tabIndex={0}
+            aria-expanded={open}
+            onClick={() => { persistOpen(!open) }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                persistOpen(!open)
+              }
+            }}
+          >
+            <span className={cls.shellChevron} data-open={open}>▶</span>
+            <span className={cls.shellTitle}>{t('plugin.title')}</span>
+            {displaySummaries.length > 0 ? (
+              displaySummaries.slice(0, 4).map((summary) => (
+                <Tag key={summary.key} tone={summary.tone}>
+                  {`${summary.label}: ${summary.badge ?? ''}`}
+                </Tag>
+              ))
+            ) : (
+              <Tag tone="quiet">{t('plugin.summaryDefault')}</Tag>
+            )}
+          </div>
+        )}
 
         {open ? (
           <div className={cls.shellBody}>
             {draft.writable ? null : <Notice tone="warning">{t('common.readOnly')}</Notice>}
             {draft.status === 'unavailable' ? <Notice tone="danger">{t('common.unavailable')}</Notice> : null}
+
+            <SectionShell
+              id="aps-models"
+              title={t('section.models')}
+              description={t('models.desc')}
+              badge={badgeFor(t, summaryById.get('models'))}
+              open={expanded.includes('models')}
+              onToggle={() => { toggleSection('models') }}
+            >
+              <ModelsSection
+                t={t}
+                profile={profile}
+                disabled={disabled}
+                onModelField={draft.setModelField}
+              />
+            </SectionShell>
 
             <SectionShell
               id="aps-headers"
@@ -262,6 +319,7 @@ function Panel(props: {
             <SectionShell
               id="aps-retry"
               title={t('section.retry')}
+              description={t('retry.desc')}
               badge={badgeFor(t, summaryById.get('retry'))}
               tone={profile.retryPolicy?.mode === 'always' ? 'warning' : 'outline'}
               open={expanded.includes('retry')}
@@ -281,6 +339,7 @@ function Panel(props: {
             <SectionShell
               id="aps-network"
               title={t('section.network')}
+              description={t('network.desc')}
               badge={networkBadge}
               tone={networkTone(summaryById)}
               open={expanded.includes('network')}
@@ -298,6 +357,7 @@ function Panel(props: {
             <SectionShell
               id="aps-vision"
               title={t('section.vision')}
+              description={t('vision.desc')}
               badge={badgeFor(t, summaryById.get('vision'))}
               open={expanded.includes('vision')}
               onToggle={() => { toggleSection('vision') }}
@@ -314,6 +374,7 @@ function Panel(props: {
             <SectionShell
               id="aps-reasoning"
               title={t('section.reasoning')}
+              description={t('reasoning.desc')}
               badge={badgeFor(t, summaryById.get('reasoning'))}
               open={expanded.includes('reasoning')}
               onToggle={() => { toggleSection('reasoning') }}
@@ -330,6 +391,7 @@ function Panel(props: {
             <SectionShell
               id="aps-compat"
               title={t('section.compatibility')}
+              description={t('compat.desc')}
               badge={badgeFor(t, summaryById.get('compatibility'))}
               open={expanded.includes('compatibility')}
               onToggle={() => { toggleSection('compatibility') }}
@@ -339,22 +401,6 @@ function Panel(props: {
                 profile={profile}
                 disabled={disabled}
                 onChange={draft.setField}
-              />
-            </SectionShell>
-
-            <SectionShell
-              id="aps-models"
-              title={t('section.models')}
-              badge={badgeFor(t, summaryById.get('models'))}
-              open={expanded.includes('models')}
-              onToggle={() => { toggleSection('models') }}
-            >
-              <ModelsSection
-                t={t}
-                profile={profile}
-                disabled={disabled}
-                onChange={draft.setField}
-                onModelField={draft.setModelField}
               />
             </SectionShell>
 

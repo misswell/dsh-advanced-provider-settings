@@ -1,37 +1,24 @@
 /**
- * Visual affordances layered over the shell's own primitives.
+ * The few affordances that carry information no label can.
  *
- * These exist because the settings surface inherited from Harness is a form: a
- * column of labelled text inputs. A form tells you what a value *is* but not
- * what it *does* — whether you are looking at your own override or an inherited
- * default, what a duration means in milliseconds, or what a retry policy does
- * over time. Everything here answers one of those questions in the shape of the
- * data itself, and deliberately uses the shell's vocabulary (`StateDot`, `Pill`,
- * `Tag`) plus `--dsw-*` tokens so it reads as part of the product rather than a
- * panel bolted into it.
+ * The rule for anything added here: it must say something the row's label, its
+ * one line of note and its control do not. A second rendering of a value that is
+ * already on screen is not a visual aid, it is noise — which is why this file is
+ * short. What survives is the retry backoff (a sequence of five numbers is hard
+ * to read as numbers, easy to read as bars) and the two formatters, since
+ * `300000` and `20971520` mean nothing to a person and `5 min` / `20 MiB` do.
  */
 import type { ReactNode } from 'react'
-import { Button, Input, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { cls } from '../styles.js'
 import type { Translate } from '../contract.js'
-import { Field } from './primitives.js'
 
 /**
- * Whether a value is inherited from a broader layer or set here.
- *
- * Uses `StateDot` rather than a coloured word so a column of these can be
- * scanned vertically; the label carries the meaning for screen readers.
+ * Format a millisecond count the way a person would say it.
+ * @param ms - the duration in milliseconds.
+ * @param t - bound translate for the unit labels.
+ * @returns a short human duration, e.g. `2 min` or `500 ms`.
  */
-export function ValueSource({ t, overridden }: { t: Translate; overridden: boolean }): ReactNode {
-  return (
-    <span className={cls.source} data-overridden={overridden ? 'true' : 'false'}>
-      <StateDot state={overridden ? 'ongoing' : 'idle'} size={6} />
-      <span>{t(overridden ? 'field.overridden' : 'field.inherited')}</span>
-    </span>
-  )
-}
-
-/** Format a millisecond count the way a person would say it. */
 export function formatDuration(ms: number, t: Translate): string {
   if (ms < 1000) return `${ms} ${t('unit.ms')}`
   if (ms % 60000 === 0) return `${ms / 60000} ${t('unit.min')}`
@@ -65,94 +52,28 @@ export function formatBytes(bytes: number, t: Translate): string {
 }
 
 /**
- * A number that is usually left alone, with the inherited default made visible.
+ * The one reset affordance, shown only where there is something to reset.
  *
- * The problem this solves: a bare box with "1024" in a placeholder gives no
- * sense of scale, so you cannot tell whether 1024 is near the floor or the
- * ceiling. The slider shows the legal range, the tick shows where the inherited
- * default sits inside it, and the buttons say explicitly which one you are on.
+ * It is a text button rather than a row of status prose because the row already
+ * says what is set: the action is the useful part.
  */
-export function SliderField(props: {
+export function InheritButton(props: {
   t: Translate
-  id: string
-  label: string
-  hint?: string | undefined
-  error?: string | undefined
-  /** `undefined` means inherit. */
-  value: number | undefined
-  /** The value in force when nothing is set at this layer. */
-  inherited: number
-  min: number
-  max: number
-  step?: number | undefined
-  /** Unit-aware rendering of a value, e.g. `2 min` or `10 MB`. */
-  format: (value: number) => string
+  overridden: boolean
   disabled?: boolean | undefined
-  onChange: (next: number | undefined) => void
+  onInherit: () => void
 }): ReactNode {
-  const overridden = props.value !== undefined
-  const current = props.value ?? props.inherited
-  const span = props.max - props.min
-  const ratio = span <= 0 ? 0 : (current - props.min) / span
-  const inheritedRatio = span <= 0 ? 0 : (props.inherited - props.min) / span
-  const percent = `${Math.min(100, Math.max(0, ratio * 100))}%`
-  const inheritedPercent = `${Math.min(100, Math.max(0, inheritedRatio * 100))}%`
-
+  if (!props.overridden) return null
   return (
-    <Field
-      label={props.label}
-      hint={props.hint}
-      error={props.error}
-      accessory={<ValueSource t={props.t} overridden={overridden} />}
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={props.disabled}
+      title={props.t('field.resetToDefault.note')}
+      onClick={props.onInherit}
     >
-      <div className={cls.slider}>
-        <div className={cls.sliderTrack}>
-          <div className={cls.sliderFill} style={{ width: percent }} />
-          <div className={cls.sliderInherited} style={{ left: inheritedPercent }} title={props.format(props.inherited)} />
-        </div>
-        <input
-          id={props.id}
-          className={cls.sliderInput}
-          type="range"
-          min={props.min}
-          max={props.max}
-          step={props.step ?? 1}
-          value={current}
-          disabled={props.disabled}
-          aria-label={props.label}
-          onChange={(event) => { props.onChange(Number(event.currentTarget.value)) }}
-        />
-      </div>
-      <div className={cls.sliderRow}>
-        <Input
-          className={`${cls.mono} ${cls.inputNarrow}`}
-          type="text"
-          inputMode="numeric"
-          value={props.value === undefined ? '' : String(props.value)}
-          placeholder={String(props.inherited)}
-          disabled={props.disabled}
-          aria-label={props.label}
-          onChange={(event) => {
-            const raw = event.currentTarget.value.trim()
-            if (raw === '') {
-              props.onChange(undefined)
-              return
-            }
-            if (!/^\d+$/.test(raw)) return
-            const parsed = Number(raw)
-            if (!Number.isFinite(parsed)) return
-            props.onChange(parsed)
-          }}
-        />
-        <span className={cls.sliderValue}>{props.format(current)}</span>
-        <span className={cls.sliderDefault}>{props.t('field.defaultIs', { value: props.format(props.inherited) })}</span>
-        {overridden ? (
-          <Button onClick={() => { props.onChange(undefined) }} title={props.t('field.resetToDefault.note')}>
-            {props.t('field.resetToDefault')}
-          </Button>
-        ) : null}
-      </div>
-    </Field>
+      {props.t('common.inherit')}
+    </Button>
   )
 }
 
@@ -174,7 +95,7 @@ export function BackoffCurve(props: {
 }): ReactNode {
   const factor = props.factor ?? 2
   if (!Number.isFinite(props.retries) || props.retries < 1 || props.initialMs <= 0) {
-    return <p className={cls.hint} style={{ margin: 0 }}>{props.t('retry.curveEmpty')}</p>
+    return <p className={cls.rowNote} style={{ margin: 0 }}>{props.t('retry.curveEmpty')}</p>
   }
 
   const waits: number[] = []
@@ -203,56 +124,12 @@ export function BackoffCurve(props: {
           <span className={cls.curveValue}>{formatDuration(value, props.t)}</span>
         </div>
       ))}
-      <p className={cls.hint} style={{ margin: 0 }}>{props.t('retry.curveTitle.note')}</p>
     </div>
   )
 }
 
 /**
- * Where a thinking level sits on the ladder Harness actually sends.
- *
- * `xhigh` and `max` are accepted by the schema but folded down to `high` before
- * the request leaves, so a picker that renders seven equal options implies a
- * granularity that does not exist. The ladder shows the five levels that reach
- * the wire and marks the folded ones as landing on `high`.
- */
-const LADDER = ['off', 'minimal', 'low', 'medium', 'high'] as const
-
-export function EffortLadder({ t, level }: { t: Translate; level: string | false | undefined }): ReactNode {
-  // `false` is the schema's explicit "off"; `undefined` means inherit.
-  const effective = level === false ? 'off' : level
-  const folded = effective === 'xhigh' || effective === 'max'
-  const landed = folded ? 'high' : effective
-  const activeIndex = LADDER.findIndex((entry) => entry === landed)
-
-  return (
-    <div className={cls.ladder}>
-      <div className={cls.ladderRow} role="img" aria-label={t('reasoning.curve')}>
-        {LADDER.map((entry, index) => {
-          const reached = activeIndex >= 0 && index <= activeIndex
-          return (
-            <span
-              key={entry}
-              className={cls.ladderStep}
-              data-reached={reached ? 'true' : 'false'}
-              data-active={index === activeIndex ? 'true' : 'false'}
-              title={t(`level.${entry}.note`)}
-            >
-              <span className={cls.ladderBar} />
-              <span className={cls.ladderName}>{t(`level.${entry}.label`)}</span>
-            </span>
-          )
-        })}
-      </div>
-      <p className={cls.hint} style={{ margin: 0 }}>
-        {folded ? t('reasoning.curveFolded', { from: t(`level.${effective}.label`) }) : t('reasoning.curve.note')}
-      </p>
-    </div>
-  )
-}
-
-/**
- * A labelled cluster of related flags.
+ * A labelled cluster heading inside a long list of flags.
  *
  * The 26 compat fields describe six different concerns; presented as one flat
  * list they are unreadable, so each cluster gets a heading and a count of how
