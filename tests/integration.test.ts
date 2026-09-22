@@ -38,32 +38,50 @@ const PLATFORM_SEEDS = [
 // Host half
 // ---------------------------------------------------------------------------
 
-/** A fake settings service recording what was registered. */
-function fakeSettings() {
-  const watchers: ((next: unknown, prev: unknown) => void)[] = []
-  const registered: string[] = []
-  let value: Record<string, unknown> = {}
+/** Settings namespace of the OpenAI-compatible provider family. */
+const PROVIDER_NAMESPACE = 'llm-pi-ai'
+
+/** This plugin's settings namespace, which is its profile ENTRY id. */
+const OWN_NAMESPACE = 'advanced-provider-settings'
+
+/**
+ * One `.volatile()` entry-config field as cordis hands it to `apply`.
+ *
+ * A live reader, not a value: the header bridge re-reads it per stream, so a
+ * write made from another window takes effect without a subscription.
+ */
+function field<T>(initial?: T) {
+  let value = initial
   return {
-    registered,
-    register(namespace: string, _schema: unknown) {
-      registered.push(namespace)
-      return {
-        get: () => value,
-        watch(callback: (next: unknown, prev: unknown) => void) {
-          watchers.push(callback)
-          return () => { watchers.splice(watchers.indexOf(callback), 1) }
-        },
-      }
+    get: () => value,
+    /** Test hook: stand in for the document changing underneath us. */
+    set(next: T | undefined) { value = next },
+  }
+}
+
+/** A settings directory serving this plugin, the provider family, and nothing else. */
+function fakeSettings(
+  descriptors: {
+    ns: string
+    revision?: number
+    value?: unknown
+    user?: unknown
+    autoGenerate?: boolean
+  }[] = [
+    { ns: OWN_NAMESPACE, revision: 1, value: {}, user: {} },
+    { ns: PROVIDER_NAMESPACE, revision: 1, value: { providers: {} }, user: {} },
+  ],
+) {
+  /** Page policies applied, newest last, with the fiber that asked for each. */
+  const configured: { presentation: unknown; owner: unknown }[] = []
+  return {
+    configured,
+    describe: () => descriptors,
+    configure: (presentation: unknown, owner: unknown) => {
+      configured.push({ presentation, owner })
+      return () => { configured.pop() }
     },
-    describe: () => [
-      { ns: 'dsh-advanced-provider-settings', revision: 1, user: {} },
-      { ns: 'llm-pi-ai', revision: 1, user: {} },
-    ],
-    get: (namespace: string) => (namespace === 'dsh-advanced-provider-settings' ? value : undefined),
     writable: true,
-    /** Test hook. */
-    set(next: Record<string, unknown>) { value = next },
-    notify() { for (const watcher of watchers) watcher(value, value) },
   }
 }
 
@@ -75,8 +93,17 @@ function fakeHostContext(options: { webServer?: boolean } = {}) {
   const logger = { warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn() }
   const settings = fakeSettings()
   const effects: (() => void)[] = []
+  /** Mount steps in the order the plugin took them, labels included. */
+  const sequence: string[] = []
   const listeners = new Map<string, ((...args: never[]) => unknown)[]>()
   const routes: { kind: string; path: string }[] = []
+
+  /** The resolved entry config cordis would hand `apply` alongside the context. */
+  const config = {
+    globalHeaders: field<Record<string, string>>(undefined),
+    ui: field(undefined),
+    migration: field(undefined),
+  }
 
   const services: Record<string, unknown> = {
     settings,
@@ -92,22 +119,40 @@ function fakeHostContext(options: { webServer?: boolean } = {}) {
     }
   }
 
+  const childEffect = (body: () => void | (() => void), label?: string) => {
+    sequence.push(label ?? 'effect')
+    const dispose = body()
+    if (typeof dispose === 'function') effects.push(dispose)
+  }
+
   return {
     settings,
+    config,
     logger,
     routes,
     effects,
+    sequence,
     listeners,
     ctx: {
       settings,
       llm: services.llm,
       logger,
-      get: (service: string) => services[service],
-      effect: (body: () => void | (() => void)) => {
-        const dispose = body()
-        if (typeof dispose === 'function') effects.push(dispose)
+      /** This plugin's own fiber, which must own the settings page policy. */
+      fiber: { id: OWN_NAMESPACE },
+      // `ctx.get` reads what is provided AT THIS MOMENT. An entry independent of
+      // the web server activates before that service exists, so it comes back
+      // undefined here — the real ordering, and the bug the child fiber fixes.
+      get: (service: string) => (service === 'webServer' ? undefined : services[service]),
+      // `ctx.inject` opens a child fiber that waits for the named services, so
+      // a composition without one never runs the callback.
+      inject: (deps: readonly string[], callback: (child: unknown) => void) => {
+        sequence.push(`inject:${deps.join(',')}`)
+        if (deps.some((dep) => services[dep] === undefined)) return
+        callback({ ...Object.fromEntries(deps.map((dep) => [dep, services[dep]])), effect: childEffect, get: (s: string) => services[s] })
       },
+      effect: childEffect,
       on: (event: string, handler: (...args: never[]) => unknown) => {
+        sequence.push(`on:${event}`)
         listeners.set(event, [...(listeners.get(event) ?? []), handler])
       },
     },
@@ -117,6 +162,17 @@ function fakeHostContext(options: { webServer?: boolean } = {}) {
 /** Load the built host bundle. */
 async function loadHostBundle(): Promise<Record<string, unknown>> {
   return (await import(new URL('../lib/index.js', import.meta.url).href)) as Record<string, unknown>
+}
+
+/**
+ * Mount the built host the way DSH does.
+ *
+ * Since 0.1.7 `apply` takes the resolved entry config as its second argument,
+ * and that config IS this plugin's settings namespace. A test that passed only
+ * the context would have the host read its headers out of `undefined`.
+ */
+function apply(host: Record<string, unknown>, harness: ReturnType<typeof fakeHostContext>): void {
+  ;(host.apply as (ctx: unknown, config: unknown) => void)(harness.ctx, harness.config)
 }
 
 describe('built host bundle', () => {
@@ -146,27 +202,53 @@ describe('built host bundle', () => {
     expect(typeof host.apply).toBe('function')
   })
 
-  it('registers its own namespace and subscribes to the stream waterfall', async () => {
+  it('turns off the generated settings page and subscribes to the stream waterfall', async () => {
     const host = await loadHostBundle()
     const harness = fakeHostContext()
-    ;(host.apply as (ctx: unknown) => void)(harness.ctx)
+    apply(host, harness)
 
-    expect(harness.settings.registered).toContain('dsh-advanced-provider-settings')
+    // Since 0.1.7 a namespace IS the entry config, so there is nothing to
+    // register. What the host does own is the page policy: leaving it on would
+    // put a second, generated editor next to this plugin's own one.
+    expect(harness.settings.configured).toEqual([
+      { presentation: { auto: false }, owner: harness.ctx.fiber },
+    ])
     expect(harness.listeners.get('llm/stream')).toHaveLength(1)
 
     for (const dispose of harness.effects) dispose()
+    // Unloading must hand the policy back, or a reload cannot re-take it.
+    expect(harness.settings.configured).toEqual([])
   })
 
   it('warns when the retired community plugin shares the process', async () => {
     const host = await loadHostBundle()
     const harness = fakeHostContext()
-    const describe = vi.fn(() => [
-      { ns: 'dsh-advanced-provider-settings', revision: 1 },
-      { ns: 'dsh-custom-provider-settings', revision: 1 },
-      { ns: 'llm-pi-ai', revision: 1 },
-    ])
-    ;(harness.ctx.settings as unknown as { describe: unknown }).describe = describe
-    ;(host.apply as (ctx: unknown) => void)(harness.ctx)
+    ;(harness.ctx.settings as unknown as { describe: unknown }).describe = () => [
+      { ns: OWN_NAMESPACE, revision: 1 },
+      { ns: 'dsh-custom-provider-settings', revision: 1, value: {} },
+      { ns: PROVIDER_NAMESPACE, revision: 1 },
+    ]
+    apply(host, harness)
+
+    const warn = harness.logger.warn as unknown as LogSpy
+    expect(warn.mock.calls).toHaveLength(1)
+    expect(String(warn.mock.calls[0]?.[0])).toContain('dsh-custom-provider-settings')
+
+    for (const dispose of harness.effects) dispose()
+  })
+
+  it('warns for a retired plugin that exposes no settings form at all', async () => {
+    const host = await loadHostBundle()
+    const harness = fakeHostContext()
+    // A pre-0.1.7 plugin has no volatile form, so it never appears in the
+    // settings directory. Reading only the directory would miss the duplicate
+    // header hazard it still causes, hence the profile-row fallback.
+    const services = harness.ctx as unknown as { get: (name: string) => unknown }
+    services.get = (service: string) => service === 'configEditor'
+      ? { configuration: () => [{ entry: { options: { id: 'dsh-custom-provider-settings' } }, override: {} }] }
+      : undefined
+
+    apply(host, harness)
 
     const warn = harness.logger.warn as unknown as LogSpy
     expect(warn.mock.calls).toHaveLength(1)
@@ -179,7 +261,7 @@ describe('built host bundle', () => {
     const host = await loadHostBundle()
     const before = globalThis.fetch
     const harness = fakeHostContext()
-    ;(host.apply as (ctx: unknown) => void)(harness.ctx)
+    apply(host, harness)
 
     expect(globalThis.fetch).not.toBe(before)
     for (const dispose of harness.effects) dispose()
@@ -199,8 +281,10 @@ describe('built host bundle', () => {
 
     try {
       const harness = fakeHostContext()
-      ;(host.apply as (ctx: unknown) => void)(harness.ctx)
-      harness.settings.set({ globalHeaders: { 'x-global': 'yes' } })
+      apply(host, harness)
+      // Written through the entry config, which is where the browser's write
+      // lands: the bridge must see it on the next stream without subscribing.
+      harness.config.globalHeaders.set({ 'x-global': 'yes' })
 
       const listener = harness.listeners.get('llm/stream')![0]!
       const chunks = (async function* () {
@@ -228,19 +312,39 @@ describe('built host bundle', () => {
     }
   })
 
-  it('registers its same-origin routes when a web server is present', async () => {
+  it('registers its same-origin routes through a child fiber, not through ctx.get', async () => {
     const host = await loadHostBundle()
     const harness = fakeHostContext({ webServer: true })
-    ;(host.apply as (ctx: unknown) => void)(harness.ctx)
+    apply(host, harness)
 
+    // `ctx.get('webServer')` reads undefined at apply time on 0.1.7: this entry
+    // is independent of the web server, so it activates before that service
+    // exists. Routes taken from that read register nothing and log nothing.
+    expect(harness.sequence).toContain('inject:webServer')
     expect(harness.routes).toEqual([{ kind: 'prefix', path: '/dsh-advanced-provider-settings' }])
+
+    for (const dispose of harness.effects) dispose()
+    expect(harness.routes).toHaveLength(0)
+  })
+
+  it('subscribes to the stream before installing the bridge that serves it', async () => {
+    const host = await loadHostBundle()
+    const harness = fakeHostContext({ webServer: true })
+    apply(host, harness)
+
+    // A stream that starts between the two must still pass through the wrapper,
+    // so the listener goes in first even though it does nothing until installed.
+    expect(harness.sequence.slice(0, 2)).toEqual([
+      'on:llm/stream',
+      'advanced-provider-settings: request-scoped header bridge',
+    ])
     for (const dispose of harness.effects) dispose()
   })
 
   it('mounts without a web server, because a headless run has none', async () => {
     const host = await loadHostBundle()
     const harness = fakeHostContext()
-    expect(() => { (host.apply as (ctx: unknown) => void)(harness.ctx) }).not.toThrow()
+    expect(() => { apply(host, harness) }).not.toThrow()
     expect(harness.routes).toHaveLength(0)
     for (const dispose of harness.effects) dispose()
   })
@@ -286,10 +390,17 @@ function clientStubs() {
   }
 }
 
-/** Evaluate the built client bundle against a stub module table. */
-async function evaluateClientBundle(): Promise<{
+/**
+ * Evaluate the built client bundle against a stub module table.
+ *
+ * @param options.served - whether the Host serves `llm-pi-ai`. Every seat
+ *   follows that namespace through `whileServed`, so flipping this is what
+ *   proves the gate exists in the BUILT artifact rather than only in source.
+ */
+async function evaluateClientBundle(options: { served?: boolean } = {}): Promise<{
   registered: { name: string; options: Record<string, unknown>; component: unknown }[]
   injected: string[]
+  inject: string[]
   dictionaries: { namespace: string; keys: string[] }[]
   missingSpecifiers: string[]
   styles: { attributes: Record<string, string>; css: string }[]
@@ -298,6 +409,7 @@ async function evaluateClientBundle(): Promise<{
   effectDisposers: number
   runDisposers: () => void
 }> {
+  const served = options.served ?? true
   const source = await readFile(path.join(root, 'lib', 'client.js'), 'utf8')
   const stubs = clientStubs()
   const missingSpecifiers: string[] = []
@@ -351,6 +463,7 @@ async function evaluateClientBundle(): Promise<{
   if (exports === undefined) throw new Error('the client bundle did not call __ModuleLoader__.load')
   const plugin = exports as { apply?: (ctx: unknown) => void; inject?: string[]; name?: string }
   expect(plugin.name).toBe('dsh-advanced-provider-settings')
+  const inject: string[] = [...(plugin.inject ?? [])]
 
   const ctx = {
     locale: {
@@ -365,16 +478,38 @@ async function evaluateClientBundle(): Promise<{
       subscribe: () => () => {},
     },
     slots: {
-      inject(key: string, body: () => unknown) {
+      inject(key: string, body: () => void | (() => void)) {
         injected.push(key)
-        body()
+        const dispose = body()
+        return typeof dispose === 'function' ? dispose : () => {}
       },
       register(options: Record<string, unknown>, component: unknown) {
-        registered.push({ name: String(options.name), options, component })
-        return () => {}
+        const entry = { name: String(options.name), options, component }
+        registered.push(entry)
+        // The real slot core returns a disposer that removes this exact entry,
+        // which is what lets a teardown be asserted rather than assumed.
+        return () => {
+          const at = registered.indexOf(entry)
+          if (at >= 0) registered.splice(at, 1)
+        }
       },
     },
-    settingsScope: { bind: () => ({ getSnapshot: () => ({ status: 'ready' }) }) },
+    configForms: {
+      get: () => ({
+        getSnapshot: () => ({ status: 'ready', value: undefined, revision: 0, writable: true }),
+        subscribe: () => () => {},
+      }),
+      describe: () => ({ getSnapshot: () => ({ view: undefined }), subscribe: () => () => {}, acceptView: () => {} }),
+      // Faithful to the real gate: `register` only runs once a listed namespace
+      // is in the describe mirror, and `whileServed` hands back its disposer.
+      whileServed: (namespaces: readonly string[], register: (served: ReadonlySet<string>) => () => void) =>
+        served && namespaces.includes(PROVIDER_NAMESPACE)
+          ? register(new Set(namespaces))
+          : () => {},
+    },
+    remote: {
+      settings: { mutate: async () => ({ ok: true, value: { ns: PROVIDER_NAMESPACE, revision: 0 } }) },
+    },
     effect(body: () => void | (() => void), label?: string) {
       if (label !== undefined) effectLabels.push(label)
       const disposer = body()
@@ -392,6 +527,7 @@ async function evaluateClientBundle(): Promise<{
   return {
     registered,
     injected,
+    inject,
     dictionaries,
     missingSpecifiers,
     styles,
@@ -495,12 +631,53 @@ describe('built client bundle', () => {
     // lets an HMR reload re-register the namespace; dropping it leaks the
     // registration, and the reload then throws "already has locale".
     expect(result.effectLabels).toContain('advanced-provider-settings: dictionaries')
-    expect(result.effectDisposers).toBe(1)
     expect(result.registrations).toBe(1)
 
     // Running the teardown, as a fiber unload would, must actually release it.
     result.runDisposers()
     expect(result.registrations).toBe(0)
+  })
+
+  it('tears down every seat through ctx.effect, so a reload cannot collide', async () => {
+    const result = await evaluateClientBundle()
+    // Four teardowns: the dictionaries plus one per seat. A seat whose
+    // `whileServed` disposer is dropped keeps its slot registration alive across
+    // a reload, and the second mount then fails on the cell it still occupies.
+    expect(result.effectDisposers).toBe(4)
+    expect(result.registered).toHaveLength(3)
+    expect(result.effectLabels.sort()).toEqual([
+      'advanced-provider-settings: dictionaries',
+      'advanced-provider-settings: Models footer',
+      'advanced-provider-settings: provider card seat',
+      'advanced-provider-settings: settings page',
+    ].sort())
+
+    result.runDisposers()
+    expect(result.registered).toHaveLength(0)
+  })
+
+  it('shows no trace of itself when the Host serves no provider namespace', async () => {
+    // Every seat edits `llm-pi-ai`, so each one is gated on that namespace being
+    // in the describe mirror. Ungated, a deployment without the provider plugin
+    // gets a nav entry and a footer pointing at editors with nothing to load.
+    const result = await evaluateClientBundle({ served: false })
+    expect(result.injected).toEqual([])
+    expect(result.registered).toEqual([])
+    // The dictionaries stay: a namespace the plugin owns is not conditional.
+    expect(result.registrations).toBe(1)
+    // `whileServed` answers with a disposer whether or not the namespace is
+    // served, so the gate cannot leak an unbalanced effect either way.
+    expect(result.effectDisposers).toBe(4)
+  })
+
+  it('asks DSH for the 0.1.7 settings services before it mounts', async () => {
+    const result = await evaluateClientBundle()
+    // `configForms` and `remote.settings` are the whole read/write transport.
+    // Requiring them is what turns "the page renders but saves nothing" into a
+    // boot log line instead of a silent defect.
+    expect(result.inject.sort()).toEqual(
+      ['configForms', 'locale', 'remote', 'remote.settings', 'slots'].sort(),
+    )
   })
 
   it('contains no dynamic code execution', async () => {

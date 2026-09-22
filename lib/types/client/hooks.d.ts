@@ -28,15 +28,20 @@ export declare function useTranslate(ctx: ClientContext): Translate;
  */
 export declare function useSettingsSnapshot<T>(scope: SettingsScopeLike<T> | undefined): SettingsSnapshotLike<T>;
 /**
- * Bind the `llm-pi-ai` namespace once per component lifetime.
+ * Read the `llm-pi-ai` namespace once per component lifetime.
  * @param ctx - the client context.
- * @returns the bound scope, or undefined when the service is absent.
+ * @returns the bound scope, or undefined before the context resolves.
  */
 export declare function useProviderScope(ctx: ClientContext | undefined): SettingsScopeLike<ProviderNamespaceSection> | undefined;
 /**
- * Bind this plugin's own namespace once per component lifetime.
+ * Read this plugin's own namespace once per component lifetime.
+ *
+ * The namespace is the Host ENTRY id, not the package name: in 0.1.7 a
+ * namespace is derived from an entry's `Config` schema, so the settings layer
+ * knows this plugin by its cordis entry id.
+ *
  * @param ctx - the client context.
- * @returns the bound scope, or undefined when the service is absent.
+ * @returns the bound scope, or undefined before the context resolves.
  */
 export declare function useOwnScope(ctx: ClientContext | undefined): SettingsScopeLike<PluginSettings> | undefined;
 /** One RPC call's state. */

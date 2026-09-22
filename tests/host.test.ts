@@ -28,10 +28,17 @@ import {
   type HttpResponseLike,
   type RouteDeps,
 } from '../src/host/routes.js'
-import { registerOwnSettings, type SettingsDescriptorLike } from '../src/host/settings.js'
+import {
+  namespaceValue,
+  ownSettingsOf,
+  PluginSettingsConfig,
+  servedNamespaces,
+  type SettingsDescriptorLike,
+} from '../src/host/settings.js'
 import { resolveEffectiveHeaders, headerAdvisories, overridesAttribution } from '../src/host/header-resolver.js'
 import { validateProviderDraft } from '../src/host/validation.js'
 import { buildDiagnostics } from '../src/host/diagnostics.js'
+import { LEGACY_NAMESPACE, PLUGIN_SETTINGS_NS, PROVIDER_NAMESPACE } from '../src/shared/capabilities.js'
 import type { PluginSettings, ProviderProfile } from '../src/shared/types.js'
 
 // ---------------------------------------------------------------------------
@@ -308,7 +315,7 @@ function depsFixture(overrides: Partial<RouteDeps> = {}): RouteDeps {
     pluginVersion: '0.1.0',
     getOwnSettings: () => settings,
     getProviderSection: () => section,
-    namespaces: () => ['llm-pi-ai', 'dsh-advanced-provider-settings'],
+    namespaces: () => [PROVIDER_NAMESPACE, PLUGIN_SETTINGS_NS],
     writable: true,
     revisionSupported: true,
     headerRuntimeActive: true,
@@ -502,7 +509,7 @@ describe('legacy op and migration', () => {
 
   it('drops an invalid legacy header instead of importing it', () => {
     const snapshot = inspectLegacy({
-      namespaces: ['dsh-custom-provider-settings', 'dsh-advanced-provider-settings'],
+      namespaces: [LEGACY_NAMESPACE, PLUGIN_SETTINGS_NS],
       legacyValue: { globalHeaders: { 'x-good': '1', 'x-bad': 'a\r\nx-evil: 1' } },
       packageInstalled: true,
     })
@@ -525,14 +532,16 @@ describe('diagnostics', () => {
   it('never throws and always names the verified build', () => {
     const report = buildDiagnostics({
       pluginVersion: '0.1.0',
-      namespaces: ['dsh-advanced-provider-settings', 'llm-pi-ai'],
+      namespaces: [PLUGIN_SETTINGS_NS, PROVIDER_NAMESPACE],
       writable: true,
       revisionSupported: true,
       headerRuntimeActive: true,
       headerRuntimeApplied: 3,
       routesRegistered: true,
     })
-    expect(report.verifiedDshVersion).toBe('0.1.5-rc.2')
+    // A pinned literal, not the constant: bumping the verified build must be a
+    // deliberate edit here rather than something that drifts along with it.
+    expect(report.verifiedDshVersion).toBe('0.1.7-alpha.1')
     expect(report.reservedHeaders).toEqual(['user-agent'])
     const byKey = new Map(report.probes.map((probe) => [probe.key, probe]))
     expect(byKey.get('settingsNamespace')?.state).toBe('ok')
@@ -556,69 +565,63 @@ describe('diagnostics', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Own-namespace registration (section 71)
+// Own-namespace configuration (section 71)
 // ---------------------------------------------------------------------------
 
-describe('own settings registration', () => {
-  /** A fake settings service holding one namespace's value. */
-  function fakeSettings(initial: PluginSettings, user?: unknown, revision = 4) {
+describe('own settings configuration', () => {
+  /** One volatile field reader, as cordis hands the config to `apply`. */
+  function field<T>(initial: T | undefined) {
     let value = initial
-    const watchers: ((next: PluginSettings, prev: PluginSettings) => void)[] = []
-    const descriptors: SettingsDescriptorLike[] = [
-      { ns: 'dsh-advanced-provider-settings', revision, ...(user === undefined ? {} : { user }) },
-      { ns: 'llm-pi-ai', revision },
-    ]
     return {
-      registered: undefined as string | undefined,
-      register(namespace: string, _schema: unknown) {
-        this.registered = namespace
-        return {
-          get: () => value,
-          watch(callback: (next: PluginSettings, prev: PluginSettings) => void) {
-            watchers.push(callback)
-            return () => { watchers.splice(watchers.indexOf(callback), 1) }
-          },
-        }
-      },
-      describe: () => descriptors,
-      get: (namespace: string) => (namespace === 'dsh-advanced-provider-settings' ? value : undefined),
-      writable: true,
-      /** Test hook: commit a new value. */
-      commit(next: PluginSettings) {
-        const prev = value
+      get: () => value,
+      set(next: T | undefined) {
         value = next
-        for (const watcher of watchers) watcher(next, prev)
       },
     }
   }
 
-  it('registers the namespace it was asked to own', () => {
-    const settings = fakeSettings({})
-    registerOwnSettings(settings)
-    expect(settings.registered).toBe('dsh-advanced-provider-settings')
+  /** A settings directory holding the given namespaces. */
+  function fakeSettings(descriptors: readonly SettingsDescriptorLike[]) {
+    return {
+      describe: () => descriptors,
+      configure: () => () => {},
+      writable: true,
+    }
+  }
+
+  it('marks every field the browser edits volatile', () => {
+    // A field without `.volatile()` is invisible to the browser: the host
+    // refuses the write before it reaches the document, which leaves the page
+    // rendering controls that can never take effect.
+    const dict = PluginSettingsConfig.dict as Record<string, { meta: { volatile?: boolean } }>
+    expect(Object.keys(dict).sort()).toEqual(['globalHeaders', 'migration', 'ui'])
+    for (const key of Object.keys(dict)) expect(dict[key]!.meta.volatile, key).toBe(true)
   })
 
-  it('normalises an empty resolution to an empty object', () => {
-    const handle = registerOwnSettings(fakeSettings(undefined as unknown as PluginSettings))
-    expect(handle.get()).toEqual({})
+  it('resolves the live config rather than a snapshot of it', () => {
+    const globalHeaders = field<Record<string, string>>(undefined)
+    const config = { globalHeaders, ui: field(undefined), migration: field(undefined) }
+    expect(ownSettingsOf(config)).toEqual({ globalHeaders: undefined, ui: undefined, migration: undefined })
+    globalHeaders.set({ 'x-a': '1' })
+    expect(ownSettingsOf(config).globalHeaders).toEqual({ 'x-a': '1' })
   })
 
-  it('exposes the raw user layer and revision that fence a write', () => {
-    const handle = registerOwnSettings(fakeSettings({ globalHeaders: { a: '1' } }, { globalHeaders: { a: '1' } }, 9))
-    expect(handle.userLayer()).toEqual({ globalHeaders: { a: '1' } })
-    expect(handle.revision()).toBe(9)
+  it('reads a namespace value out of the settings directory', () => {
+    const settings = fakeSettings([
+      { ns: 'advanced-provider-settings', revision: 9, value: { globalHeaders: { a: '1' } }, user: { globalHeaders: { a: '1' } } },
+      { ns: 'llm-pi-ai', revision: 3, value: { providers: {} } },
+    ])
+    expect(namespaceValue(settings, 'advanced-provider-settings')).toEqual({ globalHeaders: { a: '1' } })
+    expect(namespaceValue(settings, 'llm-pi-ai')).toEqual({ providers: {} })
+    expect(servedNamespaces(settings)).toEqual(['advanced-provider-settings', 'llm-pi-ai'])
   })
 
-  it('reports no override when the raw layer is absent', () => {
-    expect(registerOwnSettings(fakeSettings({})).userLayer()).toBeUndefined()
-  })
-
-  it('delivers committed changes to the watcher', () => {
-    const settings = fakeSettings({})
-    const seen: PluginSettings[] = []
-    registerOwnSettings(settings).watch((next) => seen.push(next))
-    settings.commit({ globalHeaders: { x: '1' } })
-    expect(seen).toEqual([{ globalHeaders: { x: '1' } }])
+  it('answers undefined for an entry that exposes no settings form', () => {
+    // The retired community plugin is written against the pre-0.1.7 API, so it
+    // may hold configuration while appearing nowhere in this directory.
+    const settings = fakeSettings([{ ns: 'llm-pi-ai', revision: 1, value: {} }])
+    expect(namespaceValue(settings, 'dsh-custom-provider-settings')).toBeUndefined()
+    expect(servedNamespaces(settings)).toEqual(['llm-pi-ai'])
   })
 })
 

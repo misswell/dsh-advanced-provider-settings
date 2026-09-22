@@ -148,9 +148,18 @@ describe('boot composition (real dsh-client-modules)', () => {
     expect(entry, 'the composition produced no row for this package').toBeDefined()
     // The URL is the combo route the shell preloads, revisioned for cache busting.
     expect(entry!.url).toContain(`${PACKAGE_NAME}/client.js`)
-    expect(entry!.url.startsWith('/plugins/??')).toBe(true)
-    // A combo revision: content hash plus the batch index it was packed into.
-    expect(entry!.rev).toMatch(/^[0-9a-f]{16}-\d+$/)
+    // Since 0.1.7 the row carries a DOCUMENT-RELATIVE reference: the web app's
+    // own browser routes are document-relative, so the route key's leading slash
+    // is stripped at the boundary between the two halves. Asserting the old
+    // absolute form rejects a correct 0.1.7 build.
+    expect(entry!.url.startsWith('plugins/??')).toBe(true)
+    expect(entry!.url.startsWith('/')).toBe(false)
+    // A per-entry artifact revision. Since 0.1.7 this is a bare 12-hex framed
+    // hash of the built file's metadata, and the combo batching moved to the
+    // graph's own `batches` list — a row no longer carries a batch index, so
+    // encoding one here would assert a shape the loader never produces.
+    expect(entry!.rev).toMatch(/^[0-9a-f]{12}$/)
+    expect(entry!.url).toContain(`rev=${entry!.rev}`)
   })
 
   it('resolves exports["./client"].default, not the types condition', () => {
@@ -166,8 +175,13 @@ describe('boot composition (real dsh-client-modules)', () => {
 
     // `inject` is an ARRIVAL edge: the browser system awaits these bundles
     // before materialising this one, which is what lets the slot registrations
-    // find declarations that other packages install at runtime.
-    expect(entry.inject).toEqual(['@deepseek-ai/dsh-client-ui-settings', '@deepseek-ai/dsh-client-ui-settings-models'])
+    // find declarations that other packages install at runtime, and lets
+    // `remote.settings` answer a write.
+    expect(entry.inject).toEqual([
+      '@deepseek-ai/dsh-client-ui-settings',
+      '@deepseek-ai/dsh-client-ui-settings-models',
+      '@deepseek-ai/dsh-api-remotes',
+    ])
     // `external` would make them requirable. This bundle requires none of them —
     // it only requires the three static seeds — so declaring them here would be
     // a lie that also adds a graph edge the browser cannot satisfy.
@@ -193,33 +207,32 @@ describe('boot composition (real dsh-client-modules)', () => {
     expect(preloads.some((src) => src.includes(PACKAGE_NAME))).toBe(true)
   })
 
-  it('serves the bundle as JavaScript, with this package own envelope', () => {
+  it('serves the bundle as JavaScript, with this package own envelope', async () => {
     const registry = registryFor(PACKAGE_NAME, root)
     const url = registry.graph().entries.find((row) => row.id === PACKAGE_NAME)!.url
-    const response = registry.fetchBundle(bundleRequest(url))
+    const response = await registry.fetchBundle(bundleRequest(url))
 
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('text/javascript; charset=utf-8')
     expect(response.headers.get('cache-control')).toBeTruthy()
     // The registry hands the file through untouched; the envelope is this
     // package's own build output, not something the loader adds.
-    return response.text().then((body) => {
-      expect(body).toContain('window.__ModuleLoader__.load(')
-      expect(body).toContain(`id: "${PACKAGE_NAME}"`)
-      expect(body.length).toBeGreaterThan(1000)
-    })
+    const body = await response.text()
+    expect(body).toContain('window.__ModuleLoader__.load(')
+    expect(body).toContain(`id: "${PACKAGE_NAME}"`)
+    expect(body.length).toBeGreaterThan(1000)
   })
 
-  it('answers HEAD without a body, 404 for unknown, and 405 for a write', () => {
+  it('answers HEAD without a body, 404 for unknown, and 405 for a write', async () => {
     const registry = registryFor(PACKAGE_NAME, root)
     const url = registry.graph().entries.find((row) => row.id === PACKAGE_NAME)!.url
 
-    const head = registry.fetchBundle(bundleRequest(url, 'HEAD'))
+    const head = await registry.fetchBundle(bundleRequest(url, 'HEAD'))
     expect(head.status).toBe(200)
     expect(head.body).toBeNull()
 
-    expect(registry.fetchBundle(bundleRequest('/plugins/??nope/client.js')).status).toBe(404)
-    expect(registry.fetchBundle(bundleRequest(url, 'POST')).status).toBe(405)
+    expect((await registry.fetchBundle(bundleRequest('/plugins/??nope/client.js'))).status).toBe(404)
+    expect((await registry.fetchBundle(bundleRequest(url, 'POST'))).status).toBe(405)
   })
 })
 

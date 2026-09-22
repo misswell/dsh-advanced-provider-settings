@@ -35,7 +35,7 @@ import { toRetryEditorState } from '../src/shared/retry.js'
 import {
   CACHE_RETENTIONS,
   COMPAT_FIELDS,
-  PLUGIN_NAMESPACE,
+  PLUGIN_SETTINGS_NS,
   PROVIDER_NAMESPACE,
   THINKING_LEVELS,
   TRANSPORTS,
@@ -43,7 +43,6 @@ import {
 import type {
   ClientContext,
   ProviderDirectoryEntry,
-  SettingsScopeLike,
   SettingsSnapshotLike,
   SlotRegisterOptions,
 } from '../src/client/contract.js'
@@ -121,27 +120,43 @@ function harness(options: {
   }
 
   publish(PROVIDER_NAMESPACE, options.providers ?? { providers: {} }, 1)
-  publish(PLUGIN_NAMESPACE, options.own ?? {}, 1)
+  publish(PLUGIN_SETTINGS_NS, options.own ?? {}, 1)
 
-  const bind = <T,>(spec: { namespace: string }): SettingsScopeLike<T> => ({
-    getSnapshot: () => snapshots.get(spec.namespace) as SettingsSnapshotLike<T>,
+  /** The per-entry form the shell hands out: reads only, writes ride the Remote. */
+  const form = <T,>(namespace: string) => ({
+    getSnapshot: () => snapshots.get(namespace) as SettingsSnapshotLike<T>,
     subscribe: (listener: () => void) => {
-      const set = listeners.get(spec.namespace) ?? new Set()
+      const set = listeners.get(namespace) ?? new Set()
       set.add(listener)
-      listeners.set(spec.namespace, set)
+      listeners.set(namespace, set)
       return () => { set.delete(listener) }
     },
-    set: async () => {},
-    unset: async () => {},
-    mutate: async (ops) => { writes.push({ namespace: spec.namespace, ops }) },
   })
 
   const ctx: ClientContext = {
     slots: {
-      inject: (_key: string, body: () => unknown) => body(),
+      inject: (_key: string, body: () => unknown) => {
+        const dispose = body()
+        return typeof dispose === 'function' ? () => { (dispose as () => void)() } : () => {}
+      },
       register: () => () => {},
     },
-    settingsScope: { bind },
+    configForms: {
+      get: (entryId: string) => form(entryId),
+      describe: () => ({ acceptView: () => {} }),
+      // The harness always serves what a test published, so a registration runs
+      // immediately and its disposer is what the effect tears down.
+      whileServed: (namespaces: readonly string[], register: (served: ReadonlySet<string>) => () => void) =>
+        register(new Set(namespaces)),
+    },
+    remote: {
+      settings: {
+        mutate: async (namespace: string, ops) => {
+          writes.push({ namespace, ops })
+          return { ok: true, value: { ns: namespace, revision: (snapshots.get(namespace)?.revision ?? 0) + 1 } }
+        },
+      },
+    },
     locale: {
       register: () => () => {},
       // Identity translate: an assertion can then name the dictionary key it
@@ -169,7 +184,7 @@ function harness(options: {
     writes,
     requestedKeys,
     setProviders: (value) => { publish(PROVIDER_NAMESPACE, value, (snapshots.get(PROVIDER_NAMESPACE)?.revision ?? 0) + 1) },
-    setOwn: (value) => { publish(PLUGIN_NAMESPACE, value, (snapshots.get(PLUGIN_NAMESPACE)?.revision ?? 0) + 1) },
+    setOwn: (value) => { publish(PLUGIN_SETTINGS_NS, value, (snapshots.get(PLUGIN_SETTINGS_NS)?.revision ?? 0) + 1) },
   }
 }
 
@@ -341,7 +356,7 @@ describe('provider card seat', () => {
       <ProviderAdvancedSettings ctx={h.ctx} provider={entry()} configured keyConfigured />,
     )
     expect(html).toContain('aps-shell')
-    expect(h.snapshots.get(PLUGIN_NAMESPACE)?.value).toBeDefined()
+    expect(h.snapshots.get(PLUGIN_SETTINGS_NS)?.value).toBeDefined()
   })
 
   it('renders read-only when the namespace refuses writes', () => {
@@ -745,7 +760,7 @@ describe('settings page', () => {
 
   it('renders the read-only notice when writes are refused', () => {
     const h = harness({ own: {} })
-    h.snapshots.set(PLUGIN_NAMESPACE, { ...snapshot({}, 1), writable: false, status: 'ready' })
+    h.snapshots.set(PLUGIN_SETTINGS_NS, { ...snapshot({}, 1), writable: false, status: 'ready' })
     const html = render(<GlobalSettingsPage ctx={h.ctx} />)
     expect(html).toContain('common.readOnly')
   })

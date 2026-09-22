@@ -19,13 +19,24 @@
  * Diagnostics panel surfaces it so a bug report can name it.
  */
 /** The DSH build every constant in this file was verified against. */
-export declare const VERIFIED_DSH_VERSION = "0.1.5-rc.2";
+export declare const VERIFIED_DSH_VERSION = "0.1.7-alpha.1";
 /** This plugin's own version. Kept in step with package.json by the build check. */
-export declare const PLUGIN_VERSION = "0.2.1";
+export declare const PLUGIN_VERSION = "0.3.0";
 /** Namespace owning the OpenAI-compatible provider routes. */
 export declare const PROVIDER_NAMESPACE = "llm-pi-ai";
-/** Namespace this plugin registers for its own (non-provider) configuration. */
+/** Cordis / locale / registrant name. This is the package name, not a namespace. */
 export declare const PLUGIN_NAMESPACE = "dsh-advanced-provider-settings";
+/**
+ * This plugin's own settings namespace: the profile ENTRY id from
+ * `cordis.patch.yml`, not the package name.
+ *
+ * Since DSH 0.1.7 a settings namespace is a profile entry's `Config`, so the key
+ * both halves address is `entry.options.id` — which for this bundle is
+ * `advanced-provider-settings` while the module stays `dsh-advanced-provider-
+ * settings`. The two differ by a prefix, so nothing at runtime catches a mix-up;
+ * `tests/composition.test.ts` pins this constant to the patch file instead.
+ */
+export declare const PLUGIN_SETTINGS_NS = "advanced-provider-settings";
 /** Namespace the retired community plugin used, for migration detection. */
 export declare const LEGACY_NAMESPACE = "dsh-custom-provider-settings";
 /** Locale namespace for this plugin's own copy. */

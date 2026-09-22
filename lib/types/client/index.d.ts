@@ -14,7 +14,9 @@
  *  - `ctx.slots.register(options, Component)`, where `options.name` is the
  *    TARGET SLOT KEY and the kind shape fields follow from that slot's
  *    declaration (`key` for keyed, `id`/`order`/`label` for list).
- *  - `ctx.settingsScope.bind({namespace, decode?})` for reads and writes.
+ *  - `ctx.configForms.get(entryId)` for reads and `ctx.remote.settings.mutate`
+ *    for the revision-fenced writes, both over the shell's single describe
+ *    mirror.
  *
  * Nothing here requires `@deepseek-ai/dsh-client-locale` or
  * `@deepseek-ai/dsh-client-ui-settings`: the client module table is a closed
@@ -28,9 +30,10 @@ export declare const name = "dsh-advanced-provider-settings";
 /**
  * Services to wait for before `apply` runs.
  *
- * `slots` is the extension registry, `settingsScope` the revision-fenced
- * settings transport, and `locale` the dictionary registry. All three are hard
- * requirements: without any of them this plugin has nothing to contribute.
+ * `slots` is the extension registry and `locale` the dictionary registry.
+ * `configForms` is the settings read transport and `remote.settings` its write
+ * half — both hard requirements: without them this plugin can show a page but
+ * change nothing, which is worse than showing nothing.
  */
 export declare const inject: string[];
 /** Slot key of the provider-card extension seat declared by the Models section. */

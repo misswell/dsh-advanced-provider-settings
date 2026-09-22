@@ -8,7 +8,7 @@
  */
 import { createRequire } from 'node:module'
 import {
-  PLUGIN_NAMESPACE,
+  PLUGIN_SETTINGS_NS,
   LEGACY_NAMESPACE,
   PROVIDER_NAMESPACE,
   RESERVED_HEADER_NAMES,
@@ -114,8 +114,11 @@ export function buildDiagnostics(input: DiagnosticsInput): DiagnosticsReport {
     },
     {
       key: 'settingsNamespace',
-      state: input.namespaces.includes(PLUGIN_NAMESPACE) ? 'ok' : 'missing',
-      detail: PLUGIN_NAMESPACE,
+      // The settings directory is keyed by profile ENTRY id, which this bundle's
+      // patch layer sets to `advanced-provider-settings` — not to the package
+      // name. Probing the package name reads "missing" on a healthy install.
+      state: input.namespaces.includes(PLUGIN_SETTINGS_NS) ? 'ok' : 'missing',
+      detail: PLUGIN_SETTINGS_NS,
     },
     {
       key: 'providerNamespace',

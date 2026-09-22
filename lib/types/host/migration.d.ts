@@ -1,6 +1,6 @@
 /** What the host observed about the legacy plugin. */
 export interface LegacySnapshot {
-    /** Whether the legacy namespace is served by the settings document. */
+    /** Whether the legacy plugin is in this profile, as a settings namespace or an entry. */
     namespaceDetected: boolean;
     /** Whether the legacy plugin package is installed. */
     packageInstalled: boolean;

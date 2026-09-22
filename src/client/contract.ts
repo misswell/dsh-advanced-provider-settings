@@ -45,14 +45,90 @@ export interface SettingsSnapshotLike<T> {
   mode: 'host' | 'memory'
 }
 
-/** Reactive handle over one namespace, as `ctx.settingsScope.bind` returns it. */
+/**
+ * Outcome of one namespace write.
+ *
+ * The transport answers rather than throwing, because the Host distinguishes
+ * "you read a stale revision" from "the document refuses this value" and the UI
+ * has to say which one happened — a thrown error would flatten both into one
+ * message and send the user back through the same write.
+ */
+export type WriteResult =
+  | { kind: 'written' }
+  | { kind: 'conflict'; message: string }
+  | { kind: 'refused'; message: string }
+
+/** Reactive handle over one namespace, as {@link bindNamespace} returns it. */
 export interface SettingsScopeLike<T> {
   getSnapshot: () => SettingsSnapshotLike<T>
   subscribe: (listener: () => void) => () => void
-  set: (field: string, value: unknown) => Promise<void>
-  unset: (field: string) => Promise<void>
-  mutate: (ops: readonly SettingsPathOp[], expectedRevision?: number) => Promise<void>
+  mutate: (ops: readonly SettingsPathOp[], expectedRevision?: number) => Promise<WriteResult>
 }
+
+/** One namespace as the shared describe mirror reports it. */
+export interface SettingsNamespaceViewLike {
+  ns: string
+  revision: number
+  value?: unknown
+  user?: unknown
+}
+
+/**
+ * The settings transport: per-entry forms over the shared describe mirror, plus
+ * the Remote writes those forms fold their answers through.
+ *
+ * `configForms` replaces the pre-0.1.7 `settingsScope` service. It is one shared
+ * mirror rather than a binding per caller, so the plugin's own page and the
+ * Models page can never disagree about what the document holds.
+ */
+export interface ConfigFormsLike {
+  /** Values and write queue of one Host plugin entry, keyed by its entry id. */
+  get: <T>(entryId: string) => SettingsFormLike<T>
+  /** The shared mirror face, used to fold a write's answer in. */
+  describe: () => SettingsDescribeFaceLike
+  /** Keep a registration alive while the Host serves any of these namespaces. */
+  whileServed: (
+    namespaces: readonly string[],
+    register: (served: ReadonlySet<string>) => () => void,
+  ) => () => void
+}
+
+/** The framework's per-entry form, of which only reads are used directly. */
+export interface SettingsFormLike<T> {
+  getSnapshot: () => SettingsFormSnapshotLike<T>
+  subscribe: (listener: () => void) => () => void
+}
+
+/** The framework's snapshot shape, mapped onto {@link SettingsSnapshotLike}. */
+export interface SettingsFormSnapshotLike<T> {
+  status: 'loading' | 'ready' | 'unavailable'
+  value: T | undefined
+  base: unknown
+  user: unknown
+  revision: number | undefined
+  writable: boolean
+  mode: 'host' | 'memory'
+}
+
+/** The fold-a-write-answer face of the shared mirror. */
+export interface SettingsDescribeFaceLike {
+  acceptView: (view: SettingsNamespaceViewLike) => void
+}
+
+/** The `settings` Remote namespace as this plugin calls it. */
+export interface RemoteSettingsLike {
+  mutate: (
+    ns: string,
+    ops: readonly SettingsPathOp[],
+    expectedRevision: number | undefined,
+  ) => Promise<RemoteResponse<SettingsNamespaceViewLike>>
+}
+
+/** One Remote answer: a value, or a classified failure. */
+export type RemoteResponse<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: { code: string; message: string } }
+
 
 /**
  * Register options, as the slot core documents them.
@@ -83,8 +159,12 @@ export interface SlotRegisterOptions {
 
 /** The slot registry the shell provides. */
 export interface SlotsLike {
-  /** Run a registration once the named slot exists. Returns a disposer. */
-  inject: (key: string, body: () => unknown) => unknown
+  /**
+   * Run a registration once the named slot exists, and again after each
+   * collapse. Returns the disposer ending that watch — which is what
+   * {@link ConfigFormsLike.whileServed} takes a registration to return.
+   */
+  inject: (key: string, body: () => unknown) => () => void
   /** Contribute one entry. Returns an idempotent disposer. */
   register: (options: SlotRegisterOptions, component: unknown) => () => void
 }
@@ -116,8 +196,11 @@ export interface LocaleLike {
 /** The client context this plugin consumes. */
 export interface ClientContext {
   slots: SlotsLike
-  settingsScope: {
-    bind: <T>(spec: { namespace: string; decode?: (section: unknown) => T | undefined }) => SettingsScopeLike<T>
+  /** Per-entry settings forms over the shared describe mirror. */
+  configForms: ConfigFormsLike
+  /** Host Remote namespaces; only `settings` writes are issued. */
+  remote: {
+    settings: RemoteSettingsLike
   }
   locale: LocaleLike
   /** Register teardown for the calling fiber; the label is for diagnostics. */

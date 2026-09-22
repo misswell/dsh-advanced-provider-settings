@@ -2,7 +2,8 @@
  * Client hooks: settings snapshots, RPC, and a draft-state primitive.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { PLUGIN_NAMESPACE, PROVIDER_NAMESPACE } from '../shared/capabilities.js'
+import { PLUGIN_NAMESPACE, PLUGIN_SETTINGS_NS, PROVIDER_NAMESPACE } from '../shared/capabilities.js'
+import { bindNamespace } from './transport.js'
 import type { ClientContext, SettingsScopeLike, SettingsSnapshotLike, Translate } from './contract.js'
 import type { JsonValue, PluginSettings, ProviderNamespaceSection } from '../shared/types.js'
 
@@ -70,26 +71,31 @@ const UNAVAILABLE: SettingsSnapshotLike<never> = {
 }
 
 /**
- * Bind the `llm-pi-ai` namespace once per component lifetime.
+ * Read the `llm-pi-ai` namespace once per component lifetime.
  * @param ctx - the client context.
- * @returns the bound scope, or undefined when the service is absent.
+ * @returns the bound scope, or undefined before the context resolves.
  */
 export function useProviderScope(ctx: ClientContext | undefined): SettingsScopeLike<ProviderNamespaceSection> | undefined {
   return useMemo(() => {
     if (ctx === undefined) return undefined
-    return ctx.settingsScope.bind<ProviderNamespaceSection>({ namespace: PROVIDER_NAMESPACE })
+    return bindNamespace<ProviderNamespaceSection>(ctx, PROVIDER_NAMESPACE)
   }, [ctx])
 }
 
 /**
- * Bind this plugin's own namespace once per component lifetime.
+ * Read this plugin's own namespace once per component lifetime.
+ *
+ * The namespace is the Host ENTRY id, not the package name: in 0.1.7 a
+ * namespace is derived from an entry's `Config` schema, so the settings layer
+ * knows this plugin by its cordis entry id.
+ *
  * @param ctx - the client context.
- * @returns the bound scope, or undefined when the service is absent.
+ * @returns the bound scope, or undefined before the context resolves.
  */
 export function useOwnScope(ctx: ClientContext | undefined): SettingsScopeLike<PluginSettings> | undefined {
   return useMemo(() => {
     if (ctx === undefined) return undefined
-    return ctx.settingsScope.bind<PluginSettings>({ namespace: PLUGIN_NAMESPACE })
+    return bindNamespace<PluginSettings>(ctx, PLUGIN_SETTINGS_NS)
   }, [ctx])
 }
 

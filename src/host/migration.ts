@@ -12,12 +12,12 @@
  * never writes: the client performs the write with its revision fence like any
  * other edit.
  */
-import { LEGACY_NAMESPACE, PLUGIN_NAMESPACE } from '../shared/capabilities.js'
+import { LEGACY_NAMESPACE, PLUGIN_SETTINGS_NS } from '../shared/capabilities.js'
 import { headerEntriesOf, validateHeader } from '../shared/headers.js'
 
 /** What the host observed about the legacy plugin. */
 export interface LegacySnapshot {
-  /** Whether the legacy namespace is served by the settings document. */
+  /** Whether the legacy plugin is in this profile, as a settings namespace or an entry. */
   namespaceDetected: boolean
   /** Whether the legacy plugin package is installed. */
   packageInstalled: boolean
@@ -51,7 +51,7 @@ export function inspectLegacy(options: {
   return {
     namespaceDetected,
     packageInstalled: options.packageInstalled,
-    bothActive: namespaceDetected && options.namespaces.includes(PLUGIN_NAMESPACE),
+    bothActive: namespaceDetected && options.namespaces.includes(PLUGIN_SETTINGS_NS),
     globalHeaders,
     rejectedCount,
   }

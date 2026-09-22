@@ -121,9 +121,11 @@ function realRegistry(): Registry {
  * Evaluate the built client bundle against a real registry.
  * @param existing - reuse this registry instead of building a fresh one, which
  *   is how a second `apply` against the same shell is simulated.
+ * @param served - whether the Host reports the provider namespace. A deployment
+ *   without it must leave no trace of this plugin's seats.
  * @returns the registry, with everything the registrations produced.
  */
-async function mountClient(existing?: Registry): Promise<Registry> {
+async function mountClient(existing?: Registry, served = true): Promise<Registry> {
   const registry = existing ?? realRegistry()
   const source = await readFile(path.join(root, 'lib', 'client.js'), 'utf8')
 
@@ -167,7 +169,15 @@ async function mountClient(existing?: Registry): Promise<Registry> {
       subscribe: () => () => {},
     },
     slots: registry.slots,
-    settingsScope: { bind: () => ({ getSnapshot: () => ({ status: 'loading' }) }) },
+    configForms: {
+      get: () => ({ getSnapshot: () => ({ status: 'loading' }), subscribe: () => () => {} }),
+      describe: () => ({ acceptView: () => {} }),
+      whileServed: (namespaces: readonly string[], register: (served: ReadonlySet<string>) => () => void) =>
+        served ? register(new Set(namespaces)) : () => {},
+    },
+    remote: {
+      settings: { mutate: async () => ({ ok: true, value: { ns: '', revision: 0 } }) },
+    },
     effect: (body: () => void | (() => void)) => { body() },
   })
 
@@ -186,6 +196,17 @@ describe('registration against the real slot registry', () => {
       expect(registry.core.entriesOfSlot(key), key).toHaveLength(1)
     }
     expect(registry.registered.size).toBe(3)
+  })
+
+  it('registers nothing when the Host serves no provider namespace', async () => {
+    // Every seat edits `llm-pi-ai`. In a composition without it the page would
+    // render controls that can never be saved, so the seats stay unregistered.
+    const registry = await mountClient(undefined, false)
+    expect(registry.failures.map((error) => error.message)).toEqual([])
+    expect(registry.disposers).toHaveLength(0)
+    for (const key of Object.keys(DECLARED_SLOTS)) {
+      expect(registry.core.entriesOfSlot(key), key).toHaveLength(0)
+    }
   })
 
   it('dispatches the provider card under the llm-pi-ai entry key', async () => {

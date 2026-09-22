@@ -5,8 +5,9 @@
 # dependency. The HOST half mounts on `dsh web` startup (and in headless runs
 # that load the same profile):
 #
-#   * registers the `dsh-advanced-provider-settings` settings namespace that
-#     owns global request headers and this plugin's UI preferences;
+#   * declares this entry's config, whose `.volatile()` fields ARE the
+#     `advanced-provider-settings` settings namespace: global request headers
+#     and this plugin's UI preferences;
 #   * installs the request-scoped header bridge on the `llm/stream` waterfall;
 #   * registers the same-origin RPC routes under
 #     /dsh-advanced-provider-settings/* used by the browser half, when a web
@@ -18,10 +19,13 @@
 #
 # NOTE: no `inject` is declared here. The plugin's own service wait lives in its
 # `export const inject = ['settings', 'llm']`, and `webServer` is deliberately
-# NOT part of it: the host half reaches the web server through `ctx.get()`, so a
-# composition without one (a headless profile, an SDK embed) still mounts the
-# settings namespace and the header bridge. Listing `webServer` here would make
-# the whole plugin wait for a service such a composition never provides.
+# NOT part of it: the host half reaches the web server through a `ctx.inject()`
+# child fiber rather than through its required services, so a composition without
+# one (a headless profile, an SDK embed) still mounts the settings namespace and
+# the header bridge. Requiring `webServer` here would make the whole plugin wait
+# for a service such a composition never provides — and reading it with
+# `ctx.get()` at startup finds nothing, because this entry activates BEFORE the
+# web server exists.
 - insert:
     - id: advanced-provider-settings
       name: dsh-advanced-provider-settings

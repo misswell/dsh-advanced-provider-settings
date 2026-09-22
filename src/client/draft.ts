@@ -12,7 +12,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { diffManagedProviderConfig, diffManagedProviderFields, resetAllAdvanced, resetProviderFields } from '../shared/patch.js'
 import type { AdvancedSectionId } from '../shared/summary.js'
 import type { ProviderModelEntry, ProviderProfile, SettingsPathOp } from '../shared/types.js'
-import type { SettingsScopeLike, SettingsSnapshotLike } from './contract.js'
+import type { SettingsScopeLike, SettingsSnapshotLike, WriteResult } from './contract.js'
 import { useSettingsSnapshot } from './hooks.js'
 
 /** Outcome of a save attempt. */
@@ -120,16 +120,20 @@ export function useProviderDraft(
       return 'noop'
     }
 
+    // The transport answers instead of throwing: `conflict` means another
+    // client wrote first and the fix is to re-read, `refused` means this
+    // document rejects the value and retrying the same edit cannot help. Only a
+    // broken wire still rejects, and that is the same "no answer" the missing
+    // scope renders as.
+    let result: WriteResult
     try {
-      await scope.mutate(ops, latest.revision)
-      // Keep the draft visible until the snapshot catches up, so the form does
-      // not flicker back to the pre-edit value between the write and the read.
-      return 'saved'
-    } catch (error) {
-      const code = errorCodeOf(error)
-      if (code === 'SETTINGS_CONFLICT' || code === 'settings/conflict') return 'conflict'
-      return 'rejected'
+      result = await scope.mutate(ops, latest.revision)
+    } catch {
+      return 'unavailable'
     }
+    if (result.kind === 'written') return 'saved'
+    if (result.kind === 'conflict') return 'conflict'
+    return 'rejected'
   }, [scope, dirty, draft, providerId])
 
   return {
@@ -203,11 +207,4 @@ function deleteIn(node: Record<string, unknown>, path: readonly string[]): void 
   const child = node[key]
   if (child === null || typeof child !== 'object') return
   deleteIn(child as Record<string, unknown>, path.slice(1))
-}
-
-/** Read the error code off anything thrown by the settings transport. */
-function errorCodeOf(error: unknown): string | undefined {
-  if (error === null || typeof error !== 'object') return undefined
-  const code = (error as { code?: unknown }).code
-  return typeof code === 'string' ? code : undefined
 }

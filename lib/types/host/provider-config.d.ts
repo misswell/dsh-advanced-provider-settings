@@ -1,18 +1,19 @@
-import type { PluginSettings, ProviderNamespaceSection, ProviderProfile } from '../shared/types.js';
-/** The slice of the settings service this module needs. */
-export interface SettingsReader {
-    get: (namespace: string) => unknown;
-}
+import { type SettingsServiceLike } from './settings.js';
+import type { ProviderNamespaceSection, ProviderProfile } from '../shared/types.js';
 /** One configured provider route, as the host sees it. */
 export interface HostProviderRecord {
     providerId: string;
     displayName: string;
     profile: ProviderProfile;
 }
-/** Read this plugin's own resolved settings. */
-export declare function readOwnSettings(settings: SettingsReader): PluginSettings | undefined;
-/** Read the resolved `llm-pi-ai` section. */
-export declare function readProviderSection(settings: SettingsReader): ProviderNamespaceSection | undefined;
+/**
+ * Read the resolved `llm-pi-ai` config.
+ *
+ * The directory reports an entry only when its `Config` has a volatile field, so
+ * an absent namespace here means the provider plugin is not composed into this
+ * profile — the same answer the browser gets from the describe mirror.
+ */
+export declare function readProviderSection(settings: SettingsServiceLike): ProviderNamespaceSection | undefined;
 /**
  * List the configured provider routes.
  * @param section - the resolved `llm-pi-ai` section.

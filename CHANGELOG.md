@@ -5,6 +5,76 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-09-22
+
+### Breaking
+
+**This release requires DeepSeek Harness `0.1.7` or later, and supports nothing older.** 0.1.7
+rewrote the settings layer this plugin is built on, and it did so by removing the API rather than by
+deprecating it: there is no `ctx.settingsScope` in the browser any more, and there is no
+`settings.register()` on the host. Both halves are now written against the new shape with no
+compatibility path back, so `v0.2.1` is the release to install on an older Harness.
+
+On a `0.1.6` or older host this plugin's browser bundle fails to activate, and the web boot says so
+(`dsh-advanced-provider-settings: pending (waiting for service: settingsScope)`) rather than half
+working — which is the intended failure, because a silently degraded settings panel is worse than a
+missing one.
+
+### Changed
+
+- **A namespace is now declared, never registered.** In 0.1.7 the settings directory is derived from
+  each profile entry's own `Config`, keyed by the entry's `id`. So the host half declares
+  `export const Config` with `.volatile()` on every field the browser edits — an entry with no
+  volatile field gets no namespace at all — and reads its own settings out of the `config` argument
+  `apply` receives, which is a live reader rather than a snapshot. `settings.configure({ auto: false })`
+  turns off the generated page for this entry, owned by this plugin's fiber so unloading hands the
+  policy back.
+- **The browser writes through the framework's transport, and can tell "refused" from "conflicted".**
+  Reads go through `ctx.configForms.get(entryId)`, page visibility through `acceptView`, and the three
+  seats through `ctx.configForms.whileServed(namespaces, register)` — so nothing mounts when the host
+  serves no `llm-pi-ai`. Writes go through `ctx.remote.settings.mutate(ns, ops, expectedRevision)`,
+  whose result distinguishes a revision conflict from a refused write; the older
+  `settingsScope.bind()` collapsed both into one error and the panel could not have said which happened.
+- **`webServer` left the required-services list and became a child fiber.** See *Fixed* below.
+
+### Fixed
+
+**The same-origin RPC routes never registered at all — on every release up to and including 0.2.1.**
+`apply` asked for the web server with `ctx.get('webServer')`, which reads what the composition has
+provided *at this moment*. This entry requires only `settings` and `llm`, so it activates before the
+web server exists and that read came back `undefined`: no routes, no error, no log line. Every
+server-backed feature was therefore dead on a real install — `/dsh-advanced-provider-settings/health`
+answered 404, `POST /rpc` answered 405, and *Diagnostics*, *Discover Models* and the legacy-import
+probe had nothing to talk to. Reading the bundle at rest cannot find this: the code is correct for
+the ordering `ctx.get` would have if the plugin required the service, and the composition simply
+never reaches that ordering. The routes are now attached through `ctx.inject(['webServer'], …)`, a
+child fiber that waits for the service and is disposed with the plugin, which keeps the headless case
+working — a profile with no web server still mounts the settings namespace and the header bridge.
+
+- **The Diagnostics panel reported its own settings namespace as missing on a healthy install.** The
+  probe asked whether the directory contained `dsh-advanced-provider-settings` — the *package* name —
+  while 0.1.7 keys namespaces by profile *entry* id, which this bundle's own patch layer sets to
+  `advanced-provider-settings`. Both spellings are correct identifiers for one install, so the probe
+  now checks the entry id and the panel tells the truth.
+- **The stream listener is subscribed before the header bridge is installed.** Between the two steps a
+  stream can already begin; subscribing first means it passes through the wrapper instead of finding
+  it not yet in place.
+- **The duplicate-plugin warning now fires after the bridge is installed**, so the thing it warns
+  about — two writers putting the same header on the wire — is really true at the moment it is said.
+
+### Verification
+
+Against a live `0.1.7-alpha.1` boot on the `web` profile: no activation warning in the boot log;
+`GET /dsh-advanced-provider-settings/health` → `200 {"ok":true,"version":"0.3.0"}`; the diagnostics
+RPC reports `dshVersion`, `settingsNamespace`, `providerNamespace`, `settingsRevision`,
+`settingsWritable`, `headerRuntime` and `settingsRoutes` all `ok`. In the real browser UI the *Provider
+高级设置* page mounts with its three cards, `添加 Header` → `保存` writes through the 0.1.7 transport
+into the profile's `cordis.patch.yml`, and the host reads the same value back as `source: global`
+via `effective-headers`. The test fakes now model what the real host does — `ctx.get('webServer')`
+returns `undefined` at apply time — so the defect above cannot come back quietly.
+
+Gates: `tsc --noEmit`, `eslint .`, `node scripts/build.mjs`, and 288 tests across 10 files.
+
 ## [0.2.1] — 2026-09-21
 
 ### Fixed
@@ -245,6 +315,7 @@ active, and offers to import its global header mapping without overwriting heade
 - Not supported on DeepSeek Harness `0.1.4` or earlier: the extension seat and the client-side
   settings mutation API this plugin depends on do not exist there.
 
+[0.3.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.3.0
 [0.2.1]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.2.1
 [0.2.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.2.0
 [0.1.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.1.0

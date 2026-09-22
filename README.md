@@ -2,7 +2,8 @@
 
 **Advanced Provider Settings** is a WebUI plugin for **DeepSeek Harness** (DSH) that turns the
 hidden half of an OpenAI-compatible provider into something you can see and edit. Instead of
-hand-editing `~/.dsh/settings.yaml`, you get a real control panel — on its own settings page and on
+hand-editing the profile YAML (`~/.dsh/profiles/<profile>/cordis.patch.yml`), you get a real control
+panel — on its own settings page and on
 every provider card — and it is built around the **model**: pick one, then give it its own input
 modalities, reasoning-effort mapping and compatibility flags. Everything that can only apply to the
 provider as a whole — request **Headers**, **User-Agent** control, **Retry Policy**, **Timeout** and
@@ -11,7 +12,7 @@ flags — sits in provider-level cards that each say why they are not on the mod
 written through DeepSeek Harness's own revision-fenced settings transport, so your YAML keeps its
 comments and every field you never touched stays exactly as it was.
 
-> **Status:** `v0.2.1`. Verified against DeepSeek Harness `0.1.5-rc.2`.
+> **Status:** `v0.3.0`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
 
 ---
 
@@ -36,7 +37,7 @@ comments and every field you never touched stays exactly as it was.
 DeepSeek Harness exposes a large, well-designed provider schema, and its Models page deliberately
 edits only the common fields: endpoint, credential, model list. The rest — the fields that decide
 whether a flaky gateway succeeds on the third try, whether a corporate proxy accepts your client,
-whether an image-heavy prompt is rejected before it is sent — live in `settings.yaml` and nowhere
+whether an image-heavy prompt is rejected before it is sent — live in that YAML and nowhere
 else.
 
 This plugin surfaces those fields without touching a single line of Harness source, without
@@ -67,14 +68,14 @@ anything else by name.
 
 ## Install
 
-Requires DeepSeek Harness `0.1.5-rc.2` or a compatible build, and Node.js 20+.
+Requires DeepSeek Harness `0.1.7` or a compatible build, and Node.js 20+.
 
 ```bash
 # Straight from the repository — no build step, no npm publish
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 
 # From a GitHub release tarball (a fixed, content-hashed artifact)
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.2.1/dsh-advanced-provider-settings-0.2.1.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.3.0/dsh-advanced-provider-settings-0.3.0.tgz
 
 # From npm, once published
 dsh plugin --profile web add dsh-advanced-provider-settings
@@ -96,11 +97,13 @@ dsh web
 dsh plugin --profile web remove dsh-advanced-provider-settings
 ```
 
-Removing the package removes the UI and unregisters the plugin's own settings namespace. **Your
-provider configuration is untouched** — advanced fields keep working, because they were written to
-Harness's own `llm-pi-ai` namespace, which this plugin never owned. If you also want to clear the
-fields this plugin set, use *Reset all advanced settings* on each provider card first, or delete
-the keys under `providers.<id>` in `~/.dsh/settings.yaml` by hand.
+Removing the package removes the UI, and with it this plugin's own settings namespace: on 0.1.7 a
+namespace *is* a profile entry's `Config`, so dropping the entry drops the global header list and the
+UI preferences stored under it. **Your provider configuration is untouched** — the advanced fields
+keep working, because they were written to Harness's own `llm-pi-ai` entry, which this plugin never
+owned. Both live in the active profile's user layer, `~/.dsh/profiles/<profile>/cordis.patch.yml`; to
+clear the fields this plugin set by hand, delete the `providers.<id>` keys under the `llm-pi-ai` entry
+(or use *Reset all advanced settings* on each provider card first, which shows what is about to go).
 
 ## Using it
 
@@ -155,7 +158,7 @@ the keys under `providers.<id>` in `~/.dsh/settings.yaml` by hand.
 
 ## Three behaviours that surprise people
 
-These are properties of DeepSeek Harness `0.1.5-rc.2` that this plugin surfaces rather than hides.
+These are properties of DeepSeek Harness `0.1.7-alpha.1` that this plugin surfaces rather than hides.
 Each is reported in the UI at the point where it matters.
 
 ### 1. A provider-level `User-Agent` is discarded
@@ -189,9 +192,9 @@ switch that Harness would reject.
 
 | DeepSeek Harness | Status | Notes |
 |---|---|---|
-| `0.1.5-rc.2` | **Verified** | Every constant and code path in this release was read from this build and exercised against it. |
-| other `0.1.5-rc.*` | Expected to work | Release candidates inside one patch series have not changed the provider schema historically, but this is untested. |
-| `0.1.4` and earlier | Unsupported | The `settings.models.provider-card` extension seat and the client `settingsScope` mutation API this plugin depends on do not exist. |
+| `0.1.7-alpha.1` | **Verified** | Every constant and code path in this release was read from this build and exercised against it. |
+| other `0.1.7-*` | Expected to work | Release candidates inside one patch series have not changed the provider schema historically, but this is untested. |
+| `0.1.6` and earlier | Unsupported | 0.1.7 rewrote the settings layer this plugin is built on: a namespace is now derived from a profile entry's own `Config`, and the browser writes through `configForms` and `remote.settings`. Neither exists before 0.1.7 — install `v0.2.1` there instead. |
 | `0.2.x` and later | Unknown | Check the Diagnostics panel: it reports the detected Harness version and which capabilities resolved. |
 
 The Diagnostics panel is the authoritative answer for a given install. It reports the detected
@@ -258,10 +261,12 @@ this against the built bundle.
 
 ```
 src/shared/    constants read out of the Harness schema, validation, diffing, summary
-src/host/      namespace registration, the header bridge, discovery, diagnostics, RPC routes
+src/host/      entry config schema, the header bridge, discovery, diagnostics, RPC routes
 src/client/    slot registration, the provider card panel, the settings page, locales, styles
 tests/         unit tests plus integration tests against the built artifacts
-docs/recon/    the source-level reconnaissance this implementation is based on
+docs/recon/    the source-level reconnaissance this implementation is based on — per Harness
+               version, and written against 0.1.5-rc.2. What 0.3.0 changed there is in the
+               `0.3.0` changelog entry; treat those reports as history, not as the current API.
 ```
 
 ## Known issues

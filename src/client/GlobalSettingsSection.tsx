@@ -16,7 +16,7 @@ import { useOwnScope, useProviderScope, useRpcQuery, useSettingsSnapshot, useTra
 import { LinkButton, Notice, SectionShell, Toolbar } from './components/primitives.js'
 import { HeaderEditor, hasBlockingRow } from './components/HeaderEditor.js'
 import { ProviderAdvancedEditor } from './ProviderAdvancedSettings.js'
-import type { ClientContext, Translate } from './contract.js'
+import type { ClientContext, Translate, WriteResult } from './contract.js'
 
 /** Diagnostics payload the host returns. */
 interface DiagnosticsResult {
@@ -102,6 +102,20 @@ export function GlobalSettingsPage(props: { ctx: ClientContext }): ReactNode {
     setExpanded((current) => current.includes(id) ? current.filter((at) => at !== id) : [...current, id])
   }, [])
 
+  /**
+   * What a write that did not land costs the user.
+   *
+   * A stale revision and a document refusal are different answers with
+   * different fixes, so they get different messages; `undefined` means the
+   * namespace now holds what was written.
+   */
+  const failureMessage = useCallback((result: WriteResult) => {
+    if (result.kind === 'written') return undefined
+    return result.kind === 'conflict'
+      ? { tone: 'warning' as const, text: t('common.conflict') }
+      : { tone: 'danger' as const, text: t('common.writeFailed') }
+  }, [t])
+
   const onSave = useCallback(async (): Promise<void> => {
     if (ownScope === undefined) return
     setMessage(undefined)
@@ -113,18 +127,16 @@ export function GlobalSettingsPage(props: { ctx: ClientContext }): ReactNode {
       setMessage({ tone: 'success', text: t('common.saved') })
       return
     }
+    // A refusal arrives as an answer; only a broken wire still throws.
+    let result: WriteResult
     try {
-      await ownScope.mutate(ops, latest.revision)
-      setMessage({ tone: 'success', text: t('common.saved') })
-    } catch (error) {
-      const code = error !== null && typeof error === 'object' ? (error as { code?: unknown }).code : undefined
-      setMessage(
-        code === 'SETTINGS_CONFLICT' || code === 'settings/conflict'
-          ? { tone: 'warning', text: t('common.conflict') }
-          : { tone: 'danger', text: t('common.writeFailed') },
-      )
+      result = await ownScope.mutate(ops, latest.revision)
+    } catch {
+      setMessage({ tone: 'danger', text: t('common.writeFailed') })
+      return
     }
-  }, [ownScope, headers, t])
+    setMessage(failureMessage(result) ?? { tone: 'success', text: t('common.saved') })
+  }, [ownScope, headers, t, failureMessage])
 
   const onImport = useCallback(async (): Promise<void> => {
     if (ownScope === undefined) return
@@ -136,32 +148,42 @@ export function GlobalSettingsPage(props: { ctx: ClientContext }): ReactNode {
     const ops = Object.entries(incoming)
       .filter(([name]) => !taken.has(name.toLowerCase()))
       .map(([name, value]) => ({ op: 'set' as const, path: ['globalHeaders', name], value }))
+    // The decision is recorded only once the headers themselves landed, so a
+    // failed import still asks again next time instead of hiding the prompt.
     try {
-      if (ops.length > 0) await ownScope.mutate(ops, latest.revision)
-      await ownScope.mutate(
+      if (ops.length > 0) {
+        const failed = failureMessage(await ownScope.mutate(ops, latest.revision))
+        if (failed !== undefined) {
+          setMessage(failed)
+          return
+        }
+      }
+      const marked = await ownScope.mutate(
         [{ op: 'set', path: ['migration'], value: { globalHeaders: 'imported', decidedAt: new Date().toISOString() } }],
         ownScope.getSnapshot().revision,
       )
-      setMessage({ tone: 'success', text: t('diag.migrationDone') })
-      legacy.reload()
+      const failed = failureMessage(marked)
+      setMessage(failed ?? { tone: 'success', text: t('diag.migrationDone') })
+      if (failed === undefined) legacy.reload()
     } catch {
       setMessage({ tone: 'danger', text: t('common.writeFailed') })
     }
-  }, [ownScope, legacy, t])
+  }, [ownScope, legacy, t, failureMessage])
 
   const onDecline = useCallback(async (): Promise<void> => {
     if (ownScope === undefined) return
     try {
-      await ownScope.mutate(
+      const result = await ownScope.mutate(
         [{ op: 'set', path: ['migration'], value: { globalHeaders: 'ignored', decidedAt: new Date().toISOString() } }],
         ownScope.getSnapshot().revision,
       )
-      setMessage({ tone: 'success', text: t('diag.migrationIgnored') })
-      legacy.reload()
+      const failed = failureMessage(result)
+      setMessage(failed ?? { tone: 'success', text: t('diag.migrationIgnored') })
+      if (failed === undefined) legacy.reload()
     } catch {
       setMessage({ tone: 'danger', text: t('common.writeFailed') })
     }
-  }, [ownScope, legacy, t])
+  }, [ownScope, legacy, t, failureMessage])
 
   const disabled = ownScope === undefined || !own.writable || own.status !== 'ready'
 

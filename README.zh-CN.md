@@ -2,7 +2,7 @@
 
 **Advanced Provider Settings** 是一个 **DeepSeek Harness**（DSH）的 WebUI 插件，它把
 OpenAI 兼容 Provider 那些原本只能手改 YAML 的配置项，变成看得见、点得到的界面。你不必再编辑
-`~/.dsh/settings.yaml`——在它自己的设置页上、也在每张 Provider 卡片下，都会多出 **Provider
+`~/.dsh/profiles/<profile>/cordis.patch.yml`——在它自己的设置页上、也在每张 Provider 卡片下，都会多出 **Provider
 Settings** 控制面板。面板以**模型**为主角：先选一个模型，单独给它开输入模态、reasoning effort
 映射和兼容性开关；其余只能整体生效的东西——请求 **Headers**、**User-Agent**、**Retry Policy**、
 **Timeout** 与传输方式、**Vision** 图片预算、**Reasoning** 思考档位、**Compatibility** 路由级开关
@@ -10,7 +10,7 @@ Settings** 控制面板。面板以**模型**为主角：先选一个模型，�
 自己的、带版本号的 settings 传输通道，因此你的 YAML 会保留注释，而每一个你没有动过的字段都会
 原样保留。
 
-> **状态：**`v0.2.1`，已在 DeepSeek Harness `0.1.5-rc.2` 上验证。
+> **状态：**`v0.3.0`，已在 DeepSeek Harness `0.1.7-alpha.1` 上验证。
 
 ---
 
@@ -34,7 +34,7 @@ Settings** 控制面板。面板以**模型**为主角：先选一个模型，�
 
 DeepSeek Harness 的 Provider schema 设计得相当完整，但「模型」页面只编辑常见字段：Base URL、
 凭据、模型列表。剩下的那些字段——决定一个不稳定的网关第三次重试能否成功的、决定企业代理是否
-接受你这个客户端的、决定图片过多的 prompt 是否在发出前就被拒的——只存在于 `settings.yaml` 里。
+接受你这个客户端的、决定图片过多的 prompt 是否在发出前就被拒的——只存在于那份 profile YAML 里。
 
 本插件把这些字段呈现出来，同时做到：**不改 Harness 一行源码**、**不 patch `node_modules` 里
 任何文件**、**不保存第二份配置**。UI 通过「模型」页面**已声明的扩展槽位**接入，配置读写通过框架
@@ -62,11 +62,11 @@ DeepSeek Harness 的 Provider schema 设计得相当完整，但「模型」页�
 
 ## 安装
 
-需要 DeepSeek Harness `0.1.5-rc.2` 或兼容版本，以及 Node.js 20+。
+需要 DeepSeek Harness `0.1.7` 或兼容版本，以及 Node.js 20+。
 
 ```bash
 # 从 GitHub Release 的 tgz 安装
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.2.1/dsh-advanced-provider-settings-0.2.1.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.3.0/dsh-advanced-provider-settings-0.3.0.tgz
 
 # 发布到 npm 后
 dsh plugin --profile web add dsh-advanced-provider-settings
@@ -126,14 +126,15 @@ dsh web
 dsh plugin --profile web remove dsh-advanced-provider-settings
 ```
 
-移除包会一并移除界面并注销插件自己的设置命名空间。**你的 Provider 配置不受影响**——高级字段写
-在 Harness 自己的 `llm-pi-ai` 命名空间里，本插件从不独占它。若也想清掉本插件设置的字段，请先在
-各 Provider 卡片上点「重置全部高级设置」，或手动删除 `~/.dsh/settings.yaml` 中
-`providers.<id>` 下的相应键。
+移除包会一并移除界面，以及插件自己的设置命名空间：在 0.1.7 上，命名空间**就是** profile 条目自己的
+`Config`，条目没了，挂在它下面的全局 Header 列表和界面偏好也就没了。**你的 Provider 配置不受影响**
+——高级字段写在 Harness 自己的 `llm-pi-ai` 条目里，本插件从不独占它。两者都存在当前 profile 的用户
+层 `~/.dsh/profiles/<profile>/cordis.patch.yml`；若也想清掉本插件设置的字段，请先在各 Provider 卡片上
+点「重置全部高级设置」，或手动删除 `llm-pi-ai` 条目下 `providers.<id>` 的相应键。
 
 ## 三个容易踩的坑
 
-以下都是 DeepSeek Harness `0.1.5-rc.2` 的真实行为。本插件的做法是把它们**显示出来**，而不是藏
+以下都是 DeepSeek Harness `0.1.7-alpha.1` 的真实行为。本插件的做法是把它们**显示出来**，而不是藏
 起来——每一条都会在相关位置给出提示。
 
 ### 1. Provider 级的 `User-Agent` 会被丢弃
@@ -164,9 +165,9 @@ Harness 的模型条目只接受 `input`、`reasoningEfforts`、`compat`。`retr
 
 | DeepSeek Harness | 状态 | 说明 |
 |---|---|---|
-| `0.1.5-rc.2` | **已验证** | 本版本中每个常量与代码路径都读自该构建，并针对它跑过测试。 |
-| 其它 `0.1.5-rc.*` | 预期可用 | 同一 patch 系列内历史上未改动 Provider schema，但未实测。 |
-| `0.1.4` 及更早 | 不支持 | 本插件依赖的 `settings.models.provider-card` 扩展槽位与客户端 `settingsScope` 写入 API 尚不存在。 |
+| `0.1.7-alpha.1` | **已验证** | 本版本中每个常量与代码路径都读自该构建，并针对它跑过测试。 |
+| 其它 `0.1.7-*` | 预期可用 | 同一 patch 系列内历史上未改动 Provider schema，但未实测。 |
+| `0.1.6` 及更早 | 不支持 | 0.1.7 重写了本插件赖以工作的设置层：命名空间改由 profile 条目自己的 `Config` 推导，浏览器侧改写走 `configForms` 与 `remote.settings`。这两者在 0.1.7 之前都不存在——请改装 `v0.2.1`。 |
 | `0.2.x` 及以后 | 未知 | 请看诊断面板：它会报告探测到的 Harness 版本与各能力是否解析成功。 |
 
 对任意一次安装，权威答案都在**诊断面板**：它报告探测到的 Harness 版本、本插件命名空间与
@@ -224,10 +225,11 @@ npm pack --dry-run   # 打包检查
 
 ```
 src/shared/    读自 Harness schema 的常量、校验、diff、摘要
-src/host/      命名空间注册、Header 桥、模型发现、诊断、RPC 路由
+src/host/      条目 Config schema、Header 桥、模型发现、诊断、RPC 路由
 src/client/    槽位注册、Provider 卡片面板、设置页、多语言、样式
 tests/         单元测试，以及针对构建产物的集成测试
-docs/recon/    本实现所依据的源码级调研报告
+docs/recon/    本实现所依据的源码级调研报告——按 Harness 版本撰写，写的是 0.1.5-rc.2。
+               0.3.0 在其上改了什么见 changelog 的 `0.3.0` 条目；那些报告是历史，不是当前 API。
 ```
 
 ## 已知问题

@@ -14,7 +14,9 @@
  *  - `ctx.slots.register(options, Component)`, where `options.name` is the
  *    TARGET SLOT KEY and the kind shape fields follow from that slot's
  *    declaration (`key` for keyed, `id`/`order`/`label` for list).
- *  - `ctx.settingsScope.bind({namespace, decode?})` for reads and writes.
+ *  - `ctx.configForms.get(entryId)` for reads and `ctx.remote.settings.mutate`
+ *    for the revision-fenced writes, both over the shell's single describe
+ *    mirror.
  *
  * Nothing here requires `@deepseek-ai/dsh-client-locale` or
  * `@deepseek-ai/dsh-client-ui-settings`: the client module table is a closed
@@ -36,11 +38,12 @@ export const name = PLUGIN_NAMESPACE
 /**
  * Services to wait for before `apply` runs.
  *
- * `slots` is the extension registry, `settingsScope` the revision-fenced
- * settings transport, and `locale` the dictionary registry. All three are hard
- * requirements: without any of them this plugin has nothing to contribute.
+ * `slots` is the extension registry and `locale` the dictionary registry.
+ * `configForms` is the settings read transport and `remote.settings` its write
+ * half — both hard requirements: without them this plugin can show a page but
+ * change nothing, which is worse than showing nothing.
  */
-export const inject = ['slots', 'settingsScope', 'locale']
+export const inject = ['slots', 'locale', 'remote', 'remote.settings', 'configForms']
 
 /** Slot key of the provider-card extension seat declared by the Models section. */
 export const PROVIDER_CARD_SLOT = 'settings.models.provider-card'
@@ -75,44 +78,59 @@ export function apply(ctx: ClientContext): void {
   // active locale without the shell subscribing to locale state for us.
   const translate = ctx.locale.bind(PLUGIN_NAMESPACE)
 
-  ctx.slots.inject(PROVIDER_CARD_SLOT, () =>
-    ctx.slots.register(
-      {
-        // `name` is the slot key being contributed into, not a label for this
-        // registration: the core resolves it against its declaration table.
-        name: PROVIDER_CARD_SLOT,
-        // Keyed slots dispatch on the row's owning settings namespace, which is
-        // `llm-pi-ai` for every OpenAI-compatible provider card.
-        key: PROVIDER_NAMESPACE,
-        registrant: PLUGIN_NAMESPACE,
-      },
-      createProviderCardSeat(ctx),
-    ),
+  // Every seat edits `llm-pi-ai`, so every seat follows that namespace in and
+  // out of the describe mirror: a deployment that never composed the provider
+  // plugin shows no trace of this one, instead of a page of dead editors.
+  ctx.effect(
+    () => ctx.configForms.whileServed([PROVIDER_NAMESPACE], () =>
+      ctx.slots.inject(PROVIDER_CARD_SLOT, () =>
+        ctx.slots.register(
+          {
+            // `name` is the slot key being contributed into, not a label for this
+            // registration: the core resolves it against its declaration table.
+            name: PROVIDER_CARD_SLOT,
+            // Keyed slots dispatch on the row's owning settings namespace, which is
+            // `llm-pi-ai` for every OpenAI-compatible provider card.
+            key: PROVIDER_NAMESPACE,
+            registrant: PLUGIN_NAMESPACE,
+          },
+          createProviderCardSeat(ctx),
+        ),
+      )),
+    'advanced-provider-settings: provider card seat',
   )
 
-  ctx.slots.inject(SETTINGS_SECTION_SLOT, () =>
-    ctx.slots.register(
-      {
-        name: SETTINGS_SECTION_SLOT,
-        id: PLUGIN_NAMESPACE,
-        order: SECTION_ORDER,
-        label: () => translate('global.navLabel'),
-        registrant: PLUGIN_NAMESPACE,
-      },
-      createGlobalSeat(ctx),
-    ),
+  ctx.effect(
+    () => ctx.configForms.whileServed([PROVIDER_NAMESPACE], () =>
+      ctx.slots.inject(SETTINGS_SECTION_SLOT, () =>
+        ctx.slots.register(
+          {
+            name: SETTINGS_SECTION_SLOT,
+            id: PLUGIN_NAMESPACE,
+            order: SECTION_ORDER,
+            label: () => translate('global.navLabel'),
+            registrant: PLUGIN_NAMESPACE,
+          },
+          createGlobalSeat(ctx),
+        ),
+      )),
+    'advanced-provider-settings: settings page',
   )
 
-  ctx.slots.inject(MODELS_FOOTER_SLOT, () =>
-    ctx.slots.register(
-      {
-        name: MODELS_FOOTER_SLOT,
-        id: `${PLUGIN_NAMESPACE}-footer`,
-        order: SECTION_ORDER,
-        label: () => translate('plugin.title'),
-        registrant: PLUGIN_NAMESPACE,
-      },
-      createFooterSeat(ctx),
-    ),
+  ctx.effect(
+    () => ctx.configForms.whileServed([PROVIDER_NAMESPACE], () =>
+      ctx.slots.inject(MODELS_FOOTER_SLOT, () =>
+        ctx.slots.register(
+          {
+            name: MODELS_FOOTER_SLOT,
+            id: `${PLUGIN_NAMESPACE}-footer`,
+            order: SECTION_ORDER,
+            label: () => translate('plugin.title'),
+            registrant: PLUGIN_NAMESPACE,
+          },
+          createFooterSeat(ctx),
+        ),
+      )),
+    'advanced-provider-settings: Models footer',
   )
 }

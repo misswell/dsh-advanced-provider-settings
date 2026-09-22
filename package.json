@@ -1,6 +1,6 @@
 {
   "name": "dsh-advanced-provider-settings",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Advanced provider configuration UI for DeepSeek Harness (DSH): headers, User-Agent, retry policy, timeouts, vision, reasoning, transport and compatibility.",
   "type": "module",
   "main": "lib/index.js",
@@ -32,7 +32,8 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-settings-models"
+        "@deepseek-ai/dsh-client-ui-settings-models",
+        "@deepseek-ai/dsh-api-remotes"
       ],
       "immediately": false
     }
@@ -71,19 +72,19 @@
     "prepack": "npm run build"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/schemastery": "^3.18.2"
+    "@deepseek-ai/cordis": "^4.0.3",
+    "@deepseek-ai/schemastery": "^3.18.3"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.2",
-    "@deepseek-ai/dsh-client-locale": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-client-modules": "^0.1.5-rc.2",
-    "@deepseek-ai/dsh-client-store": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-client-ui-settings": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-client-ui-settings-models": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-client-ui-slots": "0.1.5-rc.2",
-    "@deepseek-ai/schemastery": "3.18.2",
+    "@deepseek-ai/cordis": "4.0.3",
+    "@deepseek-ai/dsh-client-locale": "0.1.7-alpha.1",
+    "@deepseek-ai/dsh-client-modules": "^0.1.7-alpha.1",
+    "@deepseek-ai/dsh-client-store": "0.1.7-alpha.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.7-alpha.1",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.7-alpha.1",
+    "@deepseek-ai/dsh-client-ui-settings-models": "0.1.7-alpha.1",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.7-alpha.1",
+    "@deepseek-ai/schemastery": "3.18.3",
     "@eslint/js": "^9.39.5",
     "@types/node": "^20.14.0",
     "@types/react": "~18.3.1",
