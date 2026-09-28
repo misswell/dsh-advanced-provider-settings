@@ -149,7 +149,13 @@ export function fromInputChoice(choice: InputChoice): Modality[] | undefined {
   }
 }
 
-/** Whether a stored profile / model declaration claims image support. */
-export function claimsImageSupport(input: readonly Modality[] | undefined): boolean {
+/**
+ * Whether a stored profile / model declaration claims image support.
+ *
+ * Accepts a plain string list rather than only {@link Modality}: the installed
+ * catalog reports modalities as strings, and the question asked here — does the
+ * declaration include images — is the same one for either spelling.
+ */
+export function claimsImageSupport(input: readonly string[] | undefined): boolean {
   return input !== undefined && input.includes('image')
 }

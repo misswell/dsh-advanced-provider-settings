@@ -5,6 +5,82 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-09-28
+
+### Added
+
+- **Per-model configuration now covers the finest level Harness actually has — including routes served
+  by the installed catalog.** Until now *Per model* only had a seat when the route declared its own
+  `models` list; a catalog route was told to go and declare models on the Models page. But a non-empty
+  `models` list *replaces* the catalog, so that advice cost the user the catalog. The two channels are
+  edited where they exist: a listed route in place (as before), and a catalog route through
+  `modelOverrides.<id>`, which is the schema's own per-model channel for it.
+- **All six per-model fields are reachable on the override channel**: `name`, `contextWindow`,
+  `maxTokens`, `input`, `reasoningEfforts` and `compat`. A listed model still shows only the three
+  advanced fields, because the Models page already edits its identity and capacity and two writers for
+  one path is how a field starts flapping.
+- **The model picker is the route's live catalog**, fetched over a new `catalog-models` RPC op. The
+  listing reports what the route serves, its name and its declared modalities; when the adapter cannot
+  be asked, the card says which layer failed (`service-unavailable`, `route-unresolved`,
+  `listing-failed`) instead of showing an empty picker that reads as "no models".
+- **An override whose id the catalog no longer describes is shown, not hidden.** It is stored
+  configuration, Harness will refuse to validate it, and the row carries a warning plus the *Clear*
+  button, so a model that left the catalog does not become invisible YAML.
+- **A model's `reasoningEfforts: false` is now settable, not only displayed.** It is a per-model state
+  with no provider-level equivalent and no other editor anywhere, so a model that reasons and a model
+  that does not were previously distinguishable only if the YAML had already said so. The grid's
+  *No reasoning* button sets it; *Inherit* clears it. Going back to declared levels goes through
+  *Inherit* rather than through a seeded mapping, because this plugin does not invent a wire value for
+  a level the user has not declared.
+- **Identity and capacity rows state their fallback chain.** `contextWindow` / `maxTokens` fall back to
+  the installed catalog and then to the route's `defaultContextWindow` / `defaultMaxTokens`; the input
+  row names the catalog's declared value when there is one. None of those numbers are invented when a
+  layer is silent.
+
+### Changed
+
+- **A model entry's identity and capacity stay with the Models page on the list channel**, and the
+  editor's footer says so. The choice is deliberate: the schema accepts those keys on a listed model,
+  but the Models page is the editor that owns them, and this plugin writes only the fields nobody else
+  does.
+- **The *Per model* description, the inherit hints and the "provider-only" footer were rewritten** to
+  describe the two channels and to name route-level-only fields (headers, retry, network, image byte
+  budgets, cache retention) as a schema boundary rather than a UI shortening.
+- **`claimsImageSupport` accepts a plain string list.** The installed catalog reports modalities as
+  strings, and the question it answers — does this declaration include images — is the same one.
+- **The `off` level can be declared "offered, sends nothing" from the level grid.** `off: null` is the
+  one state a wire input cannot express — blank means *unsupported*, because DSH pins an undeclared
+  level to null — and until now only hand-written YAML could reach it. A switch under the `off` input
+  carries it: checked, the level stays selectable and the request carries no thinking parameter;
+  typing a wire value replaces it. The input's placeholder says so instead of reading "not supported"
+  while the level is in fact offered.
+- **The zh sidebar label is shortened to 「Provider 设置」.** The old one truncated in the settings
+  rail; the page title and the Models footer keep the full name.
+
+### Fixed
+
+- **The always-retry acknowledgement is persisted, not per-mount.** `ui.acknowledgedAlwaysRetry` was
+  declared in the settings schema and read by neither half, so a committed `always` policy re-locked
+  the save button on every fresh open while the ack control sat inside the folded Retry section.
+  Acceptance now hydrates from the preference (synchronously at mount, an effect for a namespace that
+  arrives late) and is written back on acceptance — once per deployment, not once per mount.
+- **Choosing "Always retry" no longer hides the only control that could unlock the save button.** The
+  editor used to treat a mode click as "already alerted" and folded the warning away while the panel
+  kept requiring the acknowledgement; the gate now answers to the acknowledgement alone, so the
+  warning stays up until it is dealt with.
+- **A locked save button says why.** When the always-retry confirmation is what blocks the save, the
+  footer names it next to the button instead of leaving a disabled button with no visible reason.
+- **The level-mapping hint no longer claims "empty means send nothing".** Blank clears the level and
+  DSH then pins it unsupported; the copy in both locales now says that, and points at the `off`
+  switch for the send-nothing state.
+
+### Notes
+
+- Route-only fields are still **not** offered per model through any interception layer. Harness does not
+  read them from a model entry, so a per-model control would be a control that does nothing.
+- The route's `defaultContextWindow` / `defaultMaxTokens` are **not** added as new provider-level
+  settings in this release; the override rows name them as a fallback but do not edit them.
+
 ## [0.3.0] — 2026-09-22
 
 ### Breaking
@@ -315,6 +391,7 @@ active, and offers to import its global header mapping without overwriting heade
 - Not supported on DeepSeek Harness `0.1.4` or earlier: the extension seat and the client-side
   settings mutation API this plugin depends on do not exist there.
 
+[0.4.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.0
 [0.3.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.3.0
 [0.2.1]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.2.1
 [0.2.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.2.0

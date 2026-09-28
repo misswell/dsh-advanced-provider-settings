@@ -17,8 +17,10 @@ export interface ProviderDraft {
     status: SettingsSnapshotLike<unknown>['status'];
     /** Replace one provider-level field. */
     setField: (field: string, value: unknown) => void;
-    /** Replace one field on one model. */
+    /** Replace one field on one model of the provider's `models` list. */
     setModelField: (index: number, field: string, value: unknown) => void;
+    /** Replace one field on one catalog model, through `modelOverrides`. */
+    setModelOverrideField: (modelId: string, field: string, value: unknown) => void;
     /** Drop every managed field in the named sections, or all of them. */
     reset: (sections?: readonly AdvancedSectionId[]) => void;
     /** Throw away local edits. */

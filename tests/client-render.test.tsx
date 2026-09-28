@@ -16,6 +16,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import * as React from 'react'
+import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ProviderAdvancedEditor, ProviderAdvancedSettings } from '../src/client/ProviderAdvancedSettings.js'
 import { GlobalSettingsPage, ProviderPicker } from '../src/client/GlobalSettingsSection.js'
@@ -314,7 +315,16 @@ describe('provider card seat', () => {
     render(<ReasoningSection t={record} profile={RICH} disabled={false} issues={noIssues} onChange={idle} />)
     render(<CompatibilitySection t={record} profile={RICH} disabled={false} onChange={idle} />)
     render(<CompatibilitySection t={record} profile={{ api: 'anthropic-messages' }} disabled={false} onChange={idle} />)
-    render(<ModelsSection t={record} profile={RICH} disabled={false} onModelField={idle} />)
+    render(
+      <ModelsSection
+        t={record}
+        providerId="example"
+        profile={RICH}
+        disabled={false}
+        onModelField={idle}
+        onModelOverrideField={idle}
+      />,
+    )
     render(<PreviewSection t={record} profile={RICH} loading={false} effective={undefined} />)
 
     const missing = [...h.requestedKeys].filter((key) => !(key in en))
@@ -511,10 +521,83 @@ describe('retry editor', () => {
     )
     expect(html).toContain('retry.alwaysTitle')
   })
+
+  it('hides the always-retry gate once acknowledged, so the gate and the save lock agree', () => {
+    const state = toRetryEditorState({ mode: 'always', backoff: { initialDelayMs: 1000, maxDelayMs: 60000, jitterRatio: 0 } })!
+    const html = render(
+      <RetryEditor t={t} state={state} onChange={() => {}} issues={new Map()} acknowledged onAcknowledge={() => {}} />,
+    )
+    expect(html).not.toContain('retry.alwaysTitle')
+  })
+})
+
+describe('always-retry acknowledgement persistence', () => {
+  /** An always policy, as `fromRetryEditorState` stores it. */
+  const ALWAYS: ProviderProfile = {
+    ...RICH,
+    retryPolicy: { mode: 'always', backoff: { initialDelayMs: 1000, maxDelayMs: 60000, jitterRatio: 0 } },
+  }
+
+  // The save button is statically always disabled (nothing is dirty in a fresh
+  // mount), so the observable that discriminates the ack gate is the footer
+  // hint naming it — which is also what a stuck user sees.
+
+  it('says the save is locked on the always-retry confirmation while unaccepted', () => {
+    const h = harness({ providers: { providers: { gateway: ALWAYS } } })
+    const html = render(<ProviderAdvancedEditor ctx={h.ctx} providerId="gateway" embedded />)
+    expect(html).toContain('common.ackNeeded')
+  })
+
+  it('stops asking once an earlier session accepted the warning', () => {
+    const h = harness({
+      providers: { providers: { gateway: ALWAYS } },
+      own: { ui: { acknowledgedAlwaysRetry: true } },
+    })
+    const html = render(<ProviderAdvancedEditor ctx={h.ctx} providerId="gateway" embedded />)
+    expect(html).not.toContain('common.ackNeeded')
+  })
 })
 
 describe('provider sections', () => {
   const profile = RICH
+
+  it('offers the off level as selectable-but-silent through a switch', () => {
+    // `off: null` is the one state the wire input cannot express (blank means
+    // unsupported), so the switch is its only editor surface.
+    const withNullableOff: ProviderProfile = {
+      ...RICH,
+      models: [{ id: 'fast', reasoningEfforts: { off: null, high: 'high' } }],
+    }
+    const html = render(
+      <ModelsSection
+        t={t}
+        providerId="example"
+        profile={withNullableOff}
+        disabled={false}
+        onModelField={() => {}}
+        onModelOverrideField={() => {}}
+      />,
+    )
+    expect(html).toContain('aria-label="reasoning.offNullable" data-checked="true"')
+  })
+
+  it('leaves the off switch unchecked when off carries a wire value instead', () => {
+    const withStringOff: ProviderProfile = {
+      ...RICH,
+      models: [{ id: 'fast', reasoningEfforts: { off: 'disabled', high: 'high' } }],
+    }
+    const html = render(
+      <ModelsSection
+        t={t}
+        providerId="example"
+        profile={withStringOff}
+        disabled={false}
+        onModelField={() => {}}
+        onModelOverrideField={() => {}}
+      />,
+    )
+    expect(html).toContain('aria-label="reasoning.offNullable" data-checked="false"')
+  })
 
   it('renders the network section with every transport choice', () => {
     const html = render(<NetworkSection t={t} profile={profile} disabled={false} issues={NO_ISSUES} onChange={() => {}} />)
@@ -577,9 +660,7 @@ describe('provider sections', () => {
   })
 
   it('renders one model at a time, with the picker listing every model', () => {
-    const html = render(
-      <ModelsSection t={t} profile={profile} disabled={false} onModelField={() => {}} />,
-    )
+    const html = render(modelsSection(profile))
     // The card's own explanation belongs to its header, not to the body.
     expect(html).not.toContain('models.desc')
     // Both models are selectable, and the image-capable one is marked as such —
@@ -592,40 +673,71 @@ describe('provider sections', () => {
     expect(html).toContain('models.inputOverridesCatalog')
     // A model that sets nothing says what it falls back to instead of a blank.
     expect(html).toContain('compat.inheritedFrom(from=compat.routeLevel,value=compat.supported)')
-    // What cannot be configured per model is stated, not left to be discovered.
+    // What cannot be configured per model is stated, not left to be discovered,
+    // together with where the fields this channel does not carry are edited.
     expect(html).toContain('models.providerOnly')
+    expect(html).toContain('models.listedNote')
   })
 
   it('shows the provider default a model inherits its input from', () => {
-    const html = render(
-      <ModelsSection
-        t={t}
-        profile={{ ...profile, models: [{ id: 'plain' }] }}
-        disabled={false}
-        onModelField={() => {}}
-      />,
-    )
+    const html = render(modelsSection({ ...profile, models: [{ id: 'plain' }] }))
     expect(html).toContain('models.inheritsDefault(value=vision.textImage)')
   })
 
   it('falls back to the catalog when no provider default declares input', () => {
-    const html = render(
-      <ModelsSection
-        t={t}
-        profile={{ ...profile, defaultInput: undefined, models: [{ id: 'plain' }] }}
-        disabled={false}
-        onModelField={() => {}}
-      />,
-    )
+    const html = render(modelsSection({ ...profile, defaultInput: undefined, models: [{ id: 'plain' }] }))
     expect(html).toContain('models.inheritsCatalog')
   })
 
-  it('renders the models section with no models', () => {
-    const html = render(
-      <ModelsSection t={t} profile={{}} disabled={false} onModelField={() => {}} />,
-    )
-    expect(html).toContain('models.none')
+  it('keeps the per-model "no reasoning" state reachable in both directions', () => {
+    // `false` exists only on a model, and only this grid edits it: showing it
+    // without a way to set or clear it would leave a legal value unreachable.
+    const off = render(modelsSection({ models: [{ id: 'plain', reasoningEfforts: false }] }))
+    expect(off).toContain('reasoning.effortsDisabled')
+    expect(off).toContain('common.inherit')
+
+    const mapped = render(modelsSection({ models: [{ id: 'plain', reasoningEfforts: { low: 'low' } }] }))
+    expect(mapped).toContain('reasoning.setDisabled')
+    // the button uses that copy as its tooltip, so match the note itself
+    expect(mapped).not.toContain('aps-note">reasoning.effortsDisabled')
   })
+
+  it('asks the host for the catalog instead of claiming there is nothing to configure', () => {
+    // A catalog route's per-model channel is keyed by model id, so the editor
+    // cannot exist until the host says which ids the route serves.
+    const html = render(modelsSection({}))
+    expect(html).toContain('models.catalogLoading')
+    expect(html).not.toContain('models.none')
+  })
+
+  it('renders the catalog-override editor for an override the catalog lost', () => {
+    // With no live listing the id can only come from the profile, and the row
+    // still has to render: it is stored configuration the user needs to clear.
+    const html = render(modelsSection({
+      api: 'openai-completions',
+      compat: { supportsDeveloperRole: true },
+      modelOverrides: { 'catalog-model': { input: ['text', 'image'], maxTokens: 4096 } },
+    }))
+    expect(html).toContain('catalog-model')
+    expect(html).toContain('models.unknownInCatalog')
+    expect(html).toContain('models.contextWindow')
+    expect(html).toContain('models.maxTokens')
+    expect(html).toContain('models.clearOverrides')
+    expect(html).toContain('compat.inheritedFrom(from=compat.routeLevel,value=compat.supported)')
+    expect(html).toContain('models.overrideNote')
+  })
+
+  /** Mount the per-model editor against one profile. */
+  const modelsSection = (profile: ProviderProfile): ReactElement => (
+    <ModelsSection
+      t={t}
+      providerId="example"
+      profile={profile}
+      disabled={false}
+      onModelField={() => {}}
+      onModelOverrideField={() => {}}
+    />
+  )
 
   it('renders the preview section with masked headers', () => {
     const html = render(

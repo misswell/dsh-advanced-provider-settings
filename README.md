@@ -5,14 +5,15 @@ hidden half of an OpenAI-compatible provider into something you can see and edit
 hand-editing the profile YAML (`~/.dsh/profiles/<profile>/cordis.patch.yml`), you get a real control
 panel — on its own settings page and on
 every provider card — and it is built around the **model**: pick one, then give it its own input
-modalities, reasoning-effort mapping and compatibility flags. Everything that can only apply to the
+modalities, reasoning-effort mapping and compatibility flags (and, on a route served by the installed
+catalog, its own name, context window and output-token cap). Everything that can only apply to the
 provider as a whole — request **Headers**, **User-Agent** control, **Retry Policy**, **Timeout** and
 transport, **Vision** image budgets, **Reasoning** thinking levels, route-level **Compatibility**
 flags — sits in provider-level cards that each say why they are not on the model. All of it is
 written through DeepSeek Harness's own revision-fenced settings transport, so your YAML keeps its
 comments and every field you never touched stays exactly as it was.
 
-> **Status:** `v0.3.0`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
+> **Status:** `v0.4.0`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
 
 ---
 
@@ -49,12 +50,15 @@ adds UI through the Models page's **declared extension slots**, and it reads and
 
 Configuration has two levels: a **model** setting is edited one model at a time, and a **provider**
 setting applies to every model on the route. That split is not a UI preference — it is the Harness
-schema, which accepts only `input`, `reasoningEfforts` and `compat` on a model entry and rejects
-anything else by name.
+schema. A model entry created by the route's own `models` list accepts only `input`,
+`reasoningEfforts` and `compat`; a route that serves the installed catalog is configured per model
+through the schema's other channel, `modelOverrides.<id>`, which accepts six fields. Everything else
+— headers, retry, network, image byte budgets, cache retention — exists only at route level, and a
+model entry that sets it is rejected by name.
 
 | Area | Level | What you get |
 |---|---|---|
-| **Per model** | Model | For the model you select: what input it accepts (text / image), the reasoning-effort mapping it actually sends on the wire, and its `compat` overrides — each flag showing the route value it falls back to. |
+| **Per model** | Model | For the model you select: what input it accepts (text / image), the reasoning-effort mapping it actually sends on the wire, and its `compat` overrides — each flag showing the route value it falls back to. On a catalog route the same editor also covers the model's display name, context window and max output tokens, because nothing else edits that channel. |
 | **Headers** | Provider / global | Per-provider and global request headers, with validation, secret masking and duplicate detection. |
 | **User-Agent** | Global | Presets (Chrome, Safari, Firefox, opencode, Codex CLI, Claude CLI) plus free text, for gateways that whitelist clients. |
 | **Retry Policy** | Provider | Harness default / Conservative / Aggressive presets, or a custom policy: mode, max retries, retryable codes, initial delay, max delay, jitter. |
@@ -75,7 +79,7 @@ Requires DeepSeek Harness `0.1.7` or a compatible build, and Node.js 20+.
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 
 # From a GitHub release tarball (a fixed, content-hashed artifact)
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.3.0/dsh-advanced-provider-settings-0.3.0.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.0/dsh-advanced-provider-settings-0.4.0.tgz
 
 # From npm, once published
 dsh plugin --profile web add dsh-advanced-provider-settings
@@ -125,10 +129,17 @@ clear the fields this plugin set by hand, delete the `providers.<id>` keys under
   model declares image input, and a dot on the right means the model already carries overrides.
   A filter box appears past 8 models. You edit one model at a time; the editor header shows its id
   and offers *Clear every override on this model*.
-- **A control that is missing from the model is one Harness refuses.** A model entry accepts only
-  input modalities, the reasoning-effort mapping and `compat`, so headers, retry, network, image byte
-  budgets and cache retention appear at provider level only — and the model editor states that
-  boundary at its foot instead of offering buttons that would be rejected on save.
+- **Which channel is being edited is stated, not implied.** A route that declares its own `models`
+  list is edited in place; a route served by the installed catalog is edited through
+  `modelOverrides.<id>`, and the card says so — with the picker listing the catalog's live models and
+  naming the layer that failed if the listing could not be read. An override whose model has since
+  left the catalog still appears, marked, so it can be cleared rather than silently kept.
+- **A control that is missing from the model is one Harness refuses.** On a listed model the entry
+  accepts only input modalities, the reasoning-effort mapping and `compat`, so headers, retry, network,
+  image byte budgets and cache retention appear at provider level only — and the model editor states
+  that boundary at its foot instead of offering buttons that would be rejected on save. Name, context
+  window and max output tokens are editable on a catalog override but deliberately left to the Models
+  page on a listed model: one path, one writer.
 - **One row is one setting.** A card holds its rows separated by a hairline, and each row is a label,
   at most one line of explanation, and one control. A row whose value you set yourself carries an
   accent bar on its left edge — that bar is the only per-field status mark, so a warning still stands
@@ -146,7 +157,9 @@ clear the fields this plugin set by hand, delete the `providers.<id>` keys under
   blocking errors and the result of an action get a fill.
 - **Thinking levels are pills, and the fold is stated in words.** `xhigh` and `max` are accepted by the
   schema but folded to `high` before the request leaves, and the row says so rather than offering a
-  granularity that does not exist.
+  granularity that does not exist. A model that does not reason at all — `reasoningEfforts: false`, a
+  model-level value with no provider-level equivalent — is declarable from the same row, and *Inherit*
+  clears it again.
 - **The backoff curve** draws the retry policy: one bar per attempt, sized by the real delay, with
   the total wait. `4 retries, 500 ms, doubling, capped at 8 s` is a shape, and it is easier to
   sanity-check as one.
@@ -178,15 +191,22 @@ resolved. That is occasionally exactly what you want (a gateway that wants its o
 frequently a mystery ("my key stopped working"). The plugin reports it as a warning next to the
 header.
 
-### 3. Only three things are per-model, and retry is not one of them
+### 3. Retry is never per-model, and "the finest level" depends on the route
 
-A model entry in Harness accepts `input`, `reasoningEfforts` and `compat` — nothing else.
-`retryPolicy`, headers, transport and timeouts, image byte budgets and cache retention are configured
-on the provider route; there is no per-model retry, and there is no global retry. This plugin shows
-that boundary instead of hiding it: *Per model* carries those three control groups and its footer
-states which fields are provider-wide, while every provider-level card says in its own description
-that the value applies to all models on the route. So you look for the boundary, rather than for a
-switch that Harness would reject.
+`retryPolicy`, headers, transport and timeouts, image byte budgets and cache retention live on the
+provider route; there is no per-model retry, and there is no global retry. This plugin shows that
+boundary instead of hiding it: every provider-level card says in its own description that the value
+applies to all models on the route, and the model editor's footer names the fields Harness would
+reject on a model entry.
+
+Which per-model channel exists depends on the route, and the difference is not cosmetic. A route
+with a non-empty `models` list **replaces** the catalog, so its entries *are* the models and accept
+`input`, `reasoningEfforts` and `compat`. A route with no `models` list serves the installed catalog
+and is configured through `modelOverrides.<id>` — keyed by a model id the catalog must describe — and
+that channel accepts six fields: those three plus `name`, `contextWindow` and `maxTokens`. The two
+are mutually exclusive in the schema: a non-empty `models` list refuses `modelOverrides` outright.
+So the card edits whichever channel the route actually has, and never suggests declaring models as a
+way to "unlock" per-model settings — that would trade your catalog away for a seat.
 
 ## Compatibility matrix
 
@@ -265,8 +285,8 @@ src/host/      entry config schema, the header bridge, discovery, diagnostics, R
 src/client/    slot registration, the provider card panel, the settings page, locales, styles
 tests/         unit tests plus integration tests against the built artifacts
 docs/recon/    the source-level reconnaissance this implementation is based on — per Harness
-               version, and written against 0.1.5-rc.2. What 0.3.0 changed there is in the
-               `0.3.0` changelog entry; treat those reports as history, not as the current API.
+               version, and written against 0.1.5-rc.2. What 0.3.0 and 0.4.0 changed there is in
+               their changelog entries; treat those reports as history, not as the current API.
 ```
 
 ## Known issues
@@ -286,10 +306,14 @@ docs/recon/    the source-level reconnaissance this implementation is based on �
   as `deepseek` or `chat_template_kwargs` because that string is what the endpoint receives and
   what provider documentation names; translating it would break the correspondence. The field
   *names*, the groups they sit in, the option descriptions and every level are localized.
-- **A route with no `models` list has no per-model seat.** *Per model* edits the model list the route
-  declares for itself; a route served by the installed catalog uses a different channel in Harness,
-  `modelOverrides.<id>`, which covers the same three fields. This plugin has no UI for that yet, so on
-  such a route you either declare the models on the Models page or edit the YAML by hand.
+- **A catalog route's per-model editor needs the host to list the catalog.** The picker's model ids
+  come from the route's live catalog over the `catalog-models` RPC op. If the host's `llm` service
+  cannot list a route's models — an older host, or a route not registered with an adapter — the card
+  says which of the two it is and stays empty, because an override is keyed by an id nothing else can
+  supply. Configuring that route means declaring its models on the Models page.
+- **A `modelOverrides` id the catalog no longer describes cannot be saved.** Harness validates the id
+  against the catalog and refuses the write; the card still shows the stored entry, with a warning and
+  a *Clear* button, so it is never invisible.
 - **Provider failover is out of scope.** It is deliberately deferred and not attempted here.
 - **A package the loader cannot locate is skipped in silence.** If a plugin's `exports` map does
   not resolve, its browser half simply never loads — no error, no log, no diagnostic. This package

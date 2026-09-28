@@ -21,7 +21,7 @@
 /** The DSH build every constant in this file was verified against. */
 export declare const VERIFIED_DSH_VERSION = "0.1.7-alpha.1";
 /** This plugin's own version. Kept in step with package.json by the build check. */
-export declare const PLUGIN_VERSION = "0.3.0";
+export declare const PLUGIN_VERSION = "0.4.0";
 /** Namespace owning the OpenAI-compatible provider routes. */
 export declare const PROVIDER_NAMESPACE = "llm-pi-ai";
 /** Cordis / locale / registrant name. This is the package name, not a namespace. */
@@ -140,7 +140,8 @@ export declare function compatFieldsFor(protocol: string | undefined): readonly 
  */
 export declare const MANAGED_PROVIDER_KEYS: readonly ["headers", "defaultInput", "reasoning", "thinkingBudgets", "cacheRetention", "transport", "timeoutMs", "streamIdleTimeoutMs", "websocketConnectTimeoutMs", "maxRequestImageBytes", "requestImagePixelBudget", "requestImageMaxBytes", "retryPolicy", "compat"];
 /**
- * Model-level keys the plugin writes: exactly the three a model entry accepts.
+ * Model-level keys the plugin writes on a `models` entry: exactly the three a
+ * model entry accepts.
  *
  * Identity, window sizes and token caps stay native to the Models page, and
  * anything else — headers, retry, transport, image budgets, cache — is rejected
@@ -148,6 +149,21 @@ export declare const MANAGED_PROVIDER_KEYS: readonly ["headers", "defaultInput",
  * list and no control for it appears per model.
  */
 export declare const MANAGED_MODEL_KEYS: readonly ["input", "reasoningEfforts", "compat"];
+/**
+ * Every field a `modelOverrides` entry may carry — the same `modelFields` object
+ * the `models` entries use, minus the `id`, whose home is the dict key.
+ *
+ * `name`, `contextWindow` and `maxTokens` ARE managed here, unlike on a `models`
+ * entry: the Models page has no `modelOverrides` seat at all, so on a catalog
+ * route this editor is the only place those fields can be reached. Leaving them
+ * out would make the finest level the schema offers unreachable, which is the
+ * opposite of the point.
+ *
+ * Source: `modelFields` in dsh-llm-pi-ai, which `modelOverride` is built from.
+ */
+export declare const MODEL_OVERRIDE_KEYS: readonly ["name", "contextWindow", "maxTokens", "input", "reasoningEfforts", "compat"];
+/** One `modelOverrides` field name. */
+export type ModelOverrideKey = (typeof MODEL_OVERRIDE_KEYS)[number];
 /**
  * Header names the Harness overwrites on every provider request, lowercased.
  *

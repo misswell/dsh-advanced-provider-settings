@@ -34,6 +34,33 @@ export interface ProviderModelEntry {
     /** Unknown fields from other writers, preserved verbatim. */
     [key: string]: unknown;
 }
+/**
+ * One `modelOverrides` entry: the fields a `models` entry may carry, minus the
+ * `id`, which is the dict key.
+ *
+ * This is the FINEST level the Harness schema offers on a catalog route. A
+ * route that declares no `models` list serves the installed catalog, and
+ * `modelOverrides` reshapes one catalog model without replacing the other
+ * thirty-seven — the only per-model channel such a route has. It accepts every
+ * field a `models` entry does, including the identity and capacity fields the
+ * Models page owns for listed models, because no page edits this channel.
+ */
+export interface ProviderModelOverride {
+    /** Display name for selectors; defaults to the catalog name, then the id. */
+    name?: string;
+    /** Maximum combined request and response context in tokens. */
+    contextWindow?: number;
+    /** Maximum output tokens; configuring one also makes it the request default. */
+    maxTokens?: number;
+    /** Request modalities this model accepts; absent keeps the catalog's. */
+    input?: Modality[];
+    /** Level → wire value map, or `false` to declare a non-reasoning model. */
+    reasoningEfforts?: false | Record<string, string | null>;
+    /** Per-model compatibility overrides, winning over the route's per field. */
+    compat?: Record<string, unknown>;
+    /** Unknown fields from other writers, preserved verbatim. */
+    [key: string]: unknown;
+}
 /** One provider profile as stored under `llm-pi-ai.providers.<id>`. */
 export interface ProviderProfile {
     /** Credential reference name. Never a secret; owned by Harness Credentials. */
@@ -42,7 +69,12 @@ export interface ProviderProfile {
     api?: string;
     baseURL?: string;
     models?: ProviderModelEntry[];
-    modelOverrides?: Record<string, unknown>;
+    /**
+     * Installed-catalog customizations by model id. Only meaningful while
+     * `models` is absent or empty — a non-empty `models` list already replaces
+     * the served catalog, so an override beside it is refused by Harness.
+     */
+    modelOverrides?: Record<string, ProviderModelOverride>;
     compat?: Record<string, unknown>;
     defaultContextWindow?: number;
     defaultMaxTokens?: number;
@@ -123,6 +155,31 @@ export declare function providerFieldPath(providerId: string, field: string): st
  * @returns the settings path.
  */
 export declare function modelFieldPath(providerId: string, modelIndex: number, field: string): string[];
+/**
+ * Build the path to one field of one `modelOverrides` entry.
+ *
+ * Keyed by model id rather than by position: the id is the dict key, so a
+ * catalog reorder cannot misdirect the edit the way an index could.
+ *
+ * @param providerId - route id.
+ * @param modelId - catalog model id, used verbatim as the dict key.
+ * @param field - field name inside the override entry.
+ * @returns the settings path.
+ */
+export declare function modelOverrideFieldPath(providerId: string, modelId: string, field: string): string[];
+/**
+ * Build the path to one whole `modelOverrides` entry.
+ * @param providerId - route id.
+ * @param modelId - catalog model id.
+ * @returns the settings path.
+ */
+export declare function modelOverrideEntryPath(providerId: string, modelId: string): string[];
+/**
+ * Build the path to a route's whole `modelOverrides` mapping.
+ * @param providerId - route id.
+ * @returns the settings path.
+ */
+export declare function modelOverrideMapPath(providerId: string): string[];
 /** Path to the plugin's global-header mapping. */
 export declare const GLOBAL_HEADERS_PATH: readonly string[];
 /** Path to the plugin's durable UI preferences. */

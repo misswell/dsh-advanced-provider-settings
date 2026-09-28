@@ -74,6 +74,21 @@ export interface LlmServiceLike {
     request: { provider?: string; baseURL?: string; api?: string; apiKey?: string },
     signal?: AbortSignal,
   ) => Promise<DiscoveredModelLike[]>
+  /**
+   * Models one registered route currently serves.
+   *
+   * Optional: it is the per-model editor's model list, and a host whose llm
+   * service has no catalog can still serve every other surface. Its absence is
+   * reported to the page rather than guessed at.
+   */
+  listModels?: (provider: string) => Promise<readonly CatalogModelLike[]>
+}
+
+/** One catalog row, as the adapter reports it. */
+export interface CatalogModelLike {
+  id: string
+  name?: string
+  inputModalities?: readonly string[]
 }
 
 /** Request options the `llm/stream` waterfall hands each listener. */
@@ -190,6 +205,9 @@ export function apply(rawContext: unknown, rawConfig: unknown): void {
     routesRegistered: () => routesRegistered,
     legacyValue: () => namespaceValue(settings, LEGACY_NAMESPACE) ?? profileEntryConfig(LEGACY_NAMESPACE),
     llm,
+    llmCatalog: {
+      ...(typeof llm.listModels === 'function' ? { listModels: llm.listModels.bind(llm) } : {}),
+    },
     runWithHeaders: (context, body) => runtime.run(context, body),
   }
 

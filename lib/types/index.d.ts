@@ -64,6 +64,20 @@ export interface LlmServiceLike {
         api?: string;
         apiKey?: string;
     }, signal?: AbortSignal) => Promise<DiscoveredModelLike[]>;
+    /**
+     * Models one registered route currently serves.
+     *
+     * Optional: it is the per-model editor's model list, and a host whose llm
+     * service has no catalog can still serve every other surface. Its absence is
+     * reported to the page rather than guessed at.
+     */
+    listModels?: (provider: string) => Promise<readonly CatalogModelLike[]>;
+}
+/** One catalog row, as the adapter reports it. */
+export interface CatalogModelLike {
+    id: string;
+    name?: string;
+    inputModalities?: readonly string[];
 }
 /** The subset of the cordis context this plugin uses. */
 export interface HostContext {

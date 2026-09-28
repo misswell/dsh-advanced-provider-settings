@@ -11,12 +11,15 @@ import {
   applyOps,
   diffGlobalHeaders,
   diffManagedModelFields,
+  diffManagedModelOverride,
+  diffManagedModelOverrides,
   diffManagedProviderConfig,
   diffManagedProviderFields,
   diffStringRecord,
   jsonEqual,
   resetAllAdvanced,
   resetProviderFields,
+  resetSections,
   setOrUnset,
 } from '../src/shared/patch.js'
 import type { ProviderProfile } from '../src/shared/types.js'
@@ -224,6 +227,139 @@ describe('resetProviderFields / resetAllAdvanced', () => {
     expect(result.models?.[0]).toEqual({ id: 'm1', name: 'm1', contextWindow: 100, maxTokens: 10 })
     expect(result.headers).toBeUndefined()
     expect(result.retryPolicy).toBeUndefined()
+  })
+})
+
+describe('the modelOverrides channel', () => {
+  /** The shape Harness accepts: catalog ids only, no `id` key inside. */
+  const before: ProviderProfile = {
+    modelOverrides: {
+      vision: { input: ['text'], maxTokens: 4096, unknownFuture: 'kept' },
+    },
+  }
+
+  it('sets one field without naming its siblings', () => {
+    const ops = diffManagedModelOverride(
+      'example',
+      'vision',
+      before.modelOverrides?.['vision'],
+      { ...before.modelOverrides?.['vision'], contextWindow: 200_000 },
+    )
+    expect(ops).toEqual([
+      { op: 'set', path: ['providers', 'example', 'modelOverrides', 'vision', 'contextWindow'], value: 200_000 },
+    ])
+  })
+
+  it('unsets a field cleared back to inherit, leaving the rest of the entry', () => {
+    const ops = diffManagedModelOverride(
+      'example',
+      'vision',
+      before.modelOverrides?.['vision'],
+      { input: ['text'], maxTokens: 4096, unknownFuture: 'kept' },
+    )
+    expect(ops).toEqual([])
+  })
+
+  it('removes the whole entry once the last field goes, rather than leaving {}', () => {
+    // An empty entry would read as "overridden" in the picker while changing
+    // nothing, so the key itself has to go.
+    const ops = diffManagedModelOverride('example', 'vision', { maxTokens: 4096 }, undefined)
+    expect(ops).toEqual([
+      { op: 'unset', path: ['providers', 'example', 'modelOverrides', 'vision', 'maxTokens'] },
+      { op: 'unset', path: ['providers', 'example', 'modelOverrides', 'vision'] },
+    ])
+  })
+
+  it('never names a model that neither side has', () => {
+    // An untouched picker row must not write anything, or merely visiting a
+    // route would litter its YAML with unset paths.
+    expect(diffManagedModelOverride('example', 'fresh', undefined, undefined)).toEqual([])
+  })
+
+  it('drops the mapping itself when the last model override is cleared', () => {
+    const ops = diffManagedModelOverrides('example', before.modelOverrides, undefined)
+    expect(ops).toContainEqual({ op: 'unset', path: ['providers', 'example', 'modelOverrides'] })
+  })
+
+  it('keeps a foreign field inside an entry the user edited', () => {
+    const patched = applyOps(
+      { providers: { example: before } },
+      diffManagedModelOverrides('example', before.modelOverrides, {
+        vision: { input: ['text'], maxTokens: 8192, unknownFuture: 'kept' },
+      }),
+    )
+    const profile = (patched.providers as Record<string, ProviderProfile>)['example']!
+    expect(profile.modelOverrides?.['vision']).toEqual({
+      input: ['text'],
+      maxTokens: 8192,
+      unknownFuture: 'kept',
+    })
+  })
+
+  it('is diffed on the override channel by diffManagedProviderConfig too', () => {
+    const after: ProviderProfile = {
+      modelOverrides: { vision: { input: ['text'], maxTokens: 8192, unknownFuture: 'kept' } },
+    }
+    const ops = diffManagedProviderConfig('example', before, after)
+    expect(ops).toEqual([
+      { op: 'set', path: ['providers', 'example', 'modelOverrides', 'vision', 'maxTokens'], value: 8192 },
+    ])
+  })
+})
+
+describe('resetSections', () => {
+  const profile: ProviderProfile = {
+    timeoutMs: 120_000,
+    streamIdleTimeoutMs: 30_000,
+    websocketConnectTimeoutMs: 10_000,
+    retryPolicy: { mode: 'always' },
+    models: [
+      { id: 'm1', name: 'm1', contextWindow: 100, maxTokens: 10, input: ['text'], reasoningEfforts: { low: 'low' } },
+    ],
+    modelOverrides: { vision: { maxTokens: 4096 } },
+  }
+
+  it('clears a section whose id is not a field name, field by field', () => {
+    // `timeout` is the UI's word for three provider keys; treating the id as a
+    // key would unset a non-existent `timeout` and leave all three behind.
+    const ops = resetSections('example', profile, ['timeout'])
+    expect(ops).toEqual([
+      { op: 'unset', path: ['providers', 'example', 'timeoutMs'] },
+      { op: 'unset', path: ['providers', 'example', 'streamIdleTimeoutMs'] },
+      { op: 'unset', path: ['providers', 'example', 'websocketConnectTimeoutMs'] },
+    ])
+  })
+
+  it('clears both per-model channels of the models section and never the list itself', () => {
+    const ops = resetSections('example', profile, ['models'])
+    const paths = ops.map((op) => op.path.join('.'))
+    expect(paths).toContain('providers.example.models.0.input')
+    expect(paths).toContain('providers.example.models.0.reasoningEfforts')
+    expect(paths).toContain('providers.example.modelOverrides.vision.maxTokens')
+    expect(paths).toContain('providers.example.modelOverrides.vision')
+    expect(paths).toContain('providers.example.modelOverrides')
+    // The list and everything the Models page owns must survive.
+    expect(paths).not.toContain('providers.example.models')
+    expect(paths.join('\n')).not.toMatch(/models\.0\.(id|name|contextWindow|maxTokens)$/)
+  })
+
+  it('touches nothing outside the named sections', () => {
+    const patched = applyOps({ providers: { example: profile } }, resetSections('example', profile, ['models']))
+    const result = (patched.providers as Record<string, ProviderProfile>)['example']!
+    expect(result.timeoutMs).toBe(120_000)
+    expect(result.retryPolicy).toEqual({ mode: 'always' })
+    expect(result.models).toEqual([{ id: 'm1', name: 'm1', contextWindow: 100, maxTokens: 10 }])
+    expect(result.modelOverrides).toBeUndefined()
+  })
+
+  it('clears model overrides under Reset All without naming a listed model window', () => {
+    const ops = resetAllAdvanced('example', profile)
+    const paths = ops.map((op) => op.path.join('.'))
+    expect(paths).toContain('providers.example.modelOverrides.vision')
+    for (const path of paths) {
+      if (!path.startsWith('providers.example.models.')) continue
+      expect(path).not.toMatch(/contextWindow|maxTokens/)
+    }
   })
 })
 

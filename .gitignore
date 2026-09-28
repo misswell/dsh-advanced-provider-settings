@@ -19,3 +19,6 @@ coverage/
 # user allows it in `allowBuilds`. A plugin with a build step therefore cannot
 # rely on being built at install time, so the bundles are built here and
 # committed. `.gitattributes` marks them generated so they do not drown a diff.
+
+# Security scanner local state
+.mimosa/

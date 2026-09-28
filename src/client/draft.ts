@@ -9,9 +9,19 @@
  * loses their edit to someone else's write) with no way to tell which.
  */
 import { useCallback, useMemo, useState } from 'react'
-import { diffManagedProviderConfig, diffManagedProviderFields, resetAllAdvanced, resetProviderFields } from '../shared/patch.js'
+import {
+  diffManagedProviderConfig,
+  diffManagedProviderFields,
+  resetAllAdvanced,
+  resetSections,
+} from '../shared/patch.js'
 import type { AdvancedSectionId } from '../shared/summary.js'
-import type { ProviderModelEntry, ProviderProfile, SettingsPathOp } from '../shared/types.js'
+import type {
+  ProviderModelEntry,
+  ProviderModelOverride,
+  ProviderProfile,
+  SettingsPathOp,
+} from '../shared/types.js'
 import type { SettingsScopeLike, SettingsSnapshotLike, WriteResult } from './contract.js'
 import { useSettingsSnapshot } from './hooks.js'
 
@@ -32,8 +42,10 @@ export interface ProviderDraft {
   status: SettingsSnapshotLike<unknown>['status']
   /** Replace one provider-level field. */
   setField: (field: string, value: unknown) => void
-  /** Replace one field on one model. */
+  /** Replace one field on one model of the provider's `models` list. */
   setModelField: (index: number, field: string, value: unknown) => void
+  /** Replace one field on one catalog model, through `modelOverrides`. */
+  setModelOverrideField: (modelId: string, field: string, value: unknown) => void
   /** Drop every managed field in the named sections, or all of them. */
   reset: (sections?: readonly AdvancedSectionId[]) => void
   /** Throw away local edits. */
@@ -91,12 +103,34 @@ export function useProviderDraft(
     })
   }, [committed])
 
+  const setModelOverrideField = useCallback((modelId: string, field: string, value: unknown): void => {
+    const id = modelId.trim()
+    // An empty dict key is refused by Harness, and there is no model to name.
+    if (id.length === 0) return
+    setPatch((previous) => {
+      const base = previous ?? committed
+      const overrides: Record<string, ProviderModelOverride> = { ...(base.modelOverrides ?? {}) }
+      const entry: Record<string, unknown> = { ...(overrides[id] ?? {}) }
+      if (value === undefined) delete entry[field]
+      else entry[field] = value
+      // An override that sets nothing is not configuration: dropping the key
+      // keeps the picker's override dot and the written document in step.
+      if (Object.keys(entry).length === 0) delete overrides[id]
+      else overrides[id] = entry as ProviderModelOverride
+
+      const next = { ...base }
+      if (Object.keys(overrides).length === 0) delete next.modelOverrides
+      else next.modelOverrides = overrides
+      return next
+    })
+  }, [committed])
+
   const reset = useCallback((sections?: readonly AdvancedSectionId[]): void => {
     setPatch((previous) => {
       const base = previous ?? committed
       const ops: SettingsPathOp[] = sections === undefined
         ? resetAllAdvanced(providerId, base)
-        : resetProviderFields(providerId, base, sections, base.models)
+        : resetSections(providerId, base, sections)
       return applyOpsLocally(base, ops)
     })
   }, [committed, providerId])
@@ -144,6 +178,7 @@ export function useProviderDraft(
     status: snapshot.status,
     setField,
     setModelField,
+    setModelOverrideField,
     reset,
     discard,
     save,

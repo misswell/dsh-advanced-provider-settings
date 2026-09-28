@@ -1,6 +1,16 @@
-import type { ProviderProfile } from './types.js';
+import type { ProviderModelOverride, ProviderProfile } from './types.js';
 /** Identifiers of the advanced sections. */
 export type AdvancedSectionId = 'headers' | 'retry' | 'timeout' | 'transport' | 'vision' | 'reasoning' | 'compatibility' | 'models';
+/**
+ * The provider-level fields each section owns, for a section-scoped reset.
+ *
+ * `models` owns none: its whole subject is the per-model channel, which lives
+ * outside the provider's own key space. Keeping this table beside
+ * {@link AdvancedSectionId} is what stops a section id from ever being mistaken
+ * for a provider field name — which is how a "reset this section" would delete
+ * an entire `models` list.
+ */
+export declare const SECTION_PROVIDER_FIELDS: Record<AdvancedSectionId, readonly string[]>;
 /** Structured status of one section, translated at render time. */
 export type SectionStatus = 
 /** Nothing set: Harness defaults apply. */
@@ -50,12 +60,16 @@ export interface SectionSummary {
  */
 export declare function compatOverrideCount(profile: ProviderProfile): number;
 /**
- * Count models whose stored declaration claims image support, plus the
- * provider default when it does.
+ * Count models whose stored declaration claims image support: the entries of a
+ * `models` list, plus any catalog model an override declares images for.
  * @param profile - the profile as read.
  * @returns the image-claiming count.
  */
 export declare function visionModelCount(profile: ProviderProfile): number;
+/** Every `modelOverrides` entry that carries at least one value. */
+export declare function configuredModelOverrides(profile: ProviderProfile): [string, ProviderModelOverride][];
+/** How many fields one override entry sets. */
+export declare function overrideEntryCount(override: ProviderModelOverride | undefined): number;
 /** Whether the provider default declares image input. */
 export declare function providerClaimsImages(profile: ProviderProfile): boolean;
 /**

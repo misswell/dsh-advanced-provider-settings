@@ -129,9 +129,13 @@ function registryFor(packageName: string, base: string): ClientModuleRegistry {
  * @returns the directory to resolve the package from.
  */
 function scratchPackage(name: string, manifest: Record<string, unknown>, clientSource?: string): string {
+  // The name must be one plain segment (no scope, no separators, no '..') and
+  // is passed through path.basename, so the writes below stay inside the temp
+  // root no matter what a future call site passes.
+  if (!/^[\w.-]+$/.test(name) || name.includes('..')) throw new Error(`invalid scratch package name: ${name}`)
   const dir = mkdtempSync(path.join(tmpdir(), 'aps-composition-'))
   scratchDirs.push(dir)
-  const pkgDir = path.join(dir, 'node_modules', name)
+  const pkgDir = path.join(dir, 'node_modules', path.basename(name))
   mkdirSync(path.join(pkgDir, 'lib'), { recursive: true })
   writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify(manifest, null, 2))
   writeFileSync(path.join(pkgDir, 'lib', 'index.js'), 'export const apply = () => {};\n')

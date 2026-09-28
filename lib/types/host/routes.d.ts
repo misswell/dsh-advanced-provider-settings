@@ -1,3 +1,4 @@
+import { type LlmModelInfoLike } from './catalog.js';
 import { type LlmDiscoveryService } from './discovery.js';
 import type { RequestHeaderContext } from './header-runtime.js';
 import type { readProviderSection } from './provider-config.js';
@@ -17,6 +18,16 @@ export interface RouteDeps {
     routesRegistered: () => boolean;
     legacyValue: () => unknown;
     llm: LlmDiscoveryService;
+    /**
+     * Catalog listing for the per-model editor on a catalog route.
+     *
+     * Absent on a host whose llm service cannot list a route's models; the op
+     * then answers `service-unavailable` and the editor says so instead of
+     * offering an id nobody can validate.
+     */
+    llmCatalog?: {
+        listModels?: (provider: string) => Promise<readonly LlmModelInfoLike[]>;
+    };
     runWithHeaders: <T>(context: RequestHeaderContext, body: () => T) => T;
 }
 /** The RPC envelope the browser half sends. */

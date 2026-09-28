@@ -15,7 +15,9 @@ import {
   PROVIDER_NAMESPACE,
 } from '../shared/capabilities.js'
 import { maskHeaderValue, isSensitiveHeader, type HeaderEntry } from '../shared/headers.js'
-import { buildDiagnostics, isPackageInstalled, type DiagnosticsReport } from './diagnostics.js'
+import type { CatalogListing } from '../shared/catalog.js'
+import { listCatalogModels, type LlmModelInfoLike } from './catalog.js'
+import { buildDiagnostics, isLegacyPluginInstalled, type DiagnosticsReport } from './diagnostics.js'
 import { discoveryHeaders, runDiscovery, type DiscoveryOutcome, type LlmDiscoveryService } from './discovery.js'
 import { guardRequest, MAX_BODY_BYTES, type GuardResult } from './guard.js'
 import { headerAdvisories, resolveEffectiveHeaders, type HeaderAdvisory } from './header-resolver.js'
@@ -42,6 +44,14 @@ export interface RouteDeps {
   routesRegistered: () => boolean
   legacyValue: () => unknown
   llm: LlmDiscoveryService
+  /**
+   * Catalog listing for the per-model editor on a catalog route.
+   *
+   * Absent on a host whose llm service cannot list a route's models; the op
+   * then answers `service-unavailable` and the editor says so instead of
+   * offering an id nobody can validate.
+   */
+  llmCatalog?: { listModels?: (provider: string) => Promise<readonly LlmModelInfoLike[]> }
   runWithHeaders: <T>(context: RequestHeaderContext, body: () => T) => T
 }
 
@@ -130,6 +140,9 @@ export async function dispatch(deps: RouteDeps, request: RpcRequest): Promise<Rp
     case 'effective-headers':
       return { ok: true, result: effectiveHeadersOf(deps, payload) }
 
+    case 'catalog-models':
+      return { ok: true, result: await catalogModelsOf(deps, payload) }
+
     case 'validate':
       return { ok: true, result: validateOf(payload) }
 
@@ -206,6 +219,12 @@ function effectiveHeadersOf(
   }
 }
 
+/** The models one route currently serves, for the per-model editor. */
+function catalogModelsOf(deps: RouteDeps, payload: Record<string, unknown>): Promise<CatalogListing> {
+  const providerId = typeof payload.providerId === 'string' ? payload.providerId : ''
+  return listCatalogModels(deps.llmCatalog ?? {}, providerId)
+}
+
 /** Validate a provider draft submitted from the browser. */
 function validateOf(payload: Record<string, unknown>): { issues: DraftIssue[] } {
   const profile = isRecord(payload.profile) ? (payload.profile as ProviderProfile) : {}
@@ -217,7 +236,7 @@ function legacyOf(deps: RouteDeps): LegacySnapshot {
   return inspectLegacy({
     namespaces: deps.namespaces(),
     legacyValue: deps.legacyValue(),
-    packageInstalled: isPackageInstalled('dsh-custom-provider-settings/package.json'),
+    packageInstalled: isLegacyPluginInstalled(),
   })
 }
 

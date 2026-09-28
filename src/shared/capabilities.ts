@@ -23,7 +23,7 @@
 export const VERIFIED_DSH_VERSION = '0.1.7-alpha.1'
 
 /** This plugin's own version. Kept in step with package.json by the build check. */
-export const PLUGIN_VERSION = '0.3.0'
+export const PLUGIN_VERSION = '0.4.0'
 
 /** Namespace owning the OpenAI-compatible provider routes. */
 export const PROVIDER_NAMESPACE = 'llm-pi-ai'
@@ -436,7 +436,8 @@ export const MANAGED_PROVIDER_KEYS = [
 ] as const
 
 /**
- * Model-level keys the plugin writes: exactly the three a model entry accepts.
+ * Model-level keys the plugin writes on a `models` entry: exactly the three a
+ * model entry accepts.
  *
  * Identity, window sizes and token caps stay native to the Models page, and
  * anything else — headers, retry, transport, image budgets, cache — is rejected
@@ -444,6 +445,30 @@ export const MANAGED_PROVIDER_KEYS = [
  * list and no control for it appears per model.
  */
 export const MANAGED_MODEL_KEYS = ['input', 'reasoningEfforts', 'compat'] as const
+
+/**
+ * Every field a `modelOverrides` entry may carry — the same `modelFields` object
+ * the `models` entries use, minus the `id`, whose home is the dict key.
+ *
+ * `name`, `contextWindow` and `maxTokens` ARE managed here, unlike on a `models`
+ * entry: the Models page has no `modelOverrides` seat at all, so on a catalog
+ * route this editor is the only place those fields can be reached. Leaving them
+ * out would make the finest level the schema offers unreachable, which is the
+ * opposite of the point.
+ *
+ * Source: `modelFields` in dsh-llm-pi-ai, which `modelOverride` is built from.
+ */
+export const MODEL_OVERRIDE_KEYS = [
+  'name',
+  'contextWindow',
+  'maxTokens',
+  'input',
+  'reasoningEfforts',
+  'compat',
+] as const
+
+/** One `modelOverrides` field name. */
+export type ModelOverrideKey = (typeof MODEL_OVERRIDE_KEYS)[number]
 
 // --------------------------------------------------------------------------
 // Reserved headers

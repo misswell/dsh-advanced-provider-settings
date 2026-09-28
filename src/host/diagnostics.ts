@@ -34,12 +34,21 @@ export interface DiagnosticsReport {
   reservedHeaders: readonly string[]
 }
 
-/** Candidate packages whose version identifies the running DSH build. */
-const VERSION_PROBE_PACKAGES = [
-  '@deepseek-ai/dsh/package.json',
-  '@deepseek-ai/dsh-llm-pi-ai/package.json',
-  '@deepseek-ai/dsh-settings/package.json',
-]
+/**
+ * Candidate packages whose version identifies the running DSH build, each
+ * resolved through a literal specifier. The probe list is compile-time
+ * knowledge, so the resolution is written as one literal require per candidate
+ * rather than a loop over a variable — an injection-shaped call no reviewer or
+ * scanner should have to re-justify.
+ */
+const VERSION_PROBE_PACKAGES: readonly { specifier: string; manifest: () => unknown }[] = (() => {
+  const req = createRequire(import.meta.url)
+  return [
+    { specifier: '@deepseek-ai/dsh/package.json', manifest: () => req('@deepseek-ai/dsh/package.json') },
+    { specifier: '@deepseek-ai/dsh-llm-pi-ai/package.json', manifest: () => req('@deepseek-ai/dsh-llm-pi-ai/package.json') },
+    { specifier: '@deepseek-ai/dsh-settings/package.json', manifest: () => req('@deepseek-ai/dsh-settings/package.json') },
+  ]
+})()
 
 /**
  * Best-effort read of the running DSH version.
@@ -52,11 +61,10 @@ const VERSION_PROBE_PACKAGES = [
  */
 export function detectDshVersion(): string | undefined {
   try {
-    const require = createRequire(import.meta.url)
-    for (const specifier of VERSION_PROBE_PACKAGES) {
+    for (const { manifest } of VERSION_PROBE_PACKAGES) {
       try {
-        const manifest = require(specifier) as { version?: unknown }
-        if (typeof manifest.version === 'string' && manifest.version.length > 0) return manifest.version
+        const read = manifest() as { version?: unknown }
+        if (typeof read.version === 'string' && read.version.length > 0) return read.version
       } catch {
         // Try the next candidate; a missing peer is not a diagnostic failure.
         continue
@@ -69,13 +77,26 @@ export function detectDshVersion(): string | undefined {
 }
 
 /**
- * Whether a package is installed and resolvable from the plugin.
- * @param specifier - a `package.json` specifier to resolve.
- * @returns whether resolution succeeded.
+ * Whether the models-page extension package is installed. Resolved through a
+ * literal specifier: the candidate is compile-time knowledge, and a variable
+ * require is an injection-shaped call.
  */
-export function isPackageInstalled(specifier: string): boolean {
+export function isModelsExtensionInstalled(): boolean {
   try {
-    createRequire(import.meta.url)(specifier)
+    createRequire(import.meta.url)('@deepseek-ai/dsh-client-ui-settings-models/package.json')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Whether the retired community plugin is still installed beside this one.
+ * Resolved through a literal specifier for the same reason.
+ */
+export function isLegacyPluginInstalled(): boolean {
+  try {
+    createRequire(import.meta.url)('dsh-custom-provider-settings/package.json')
     return true
   } catch {
     return false
@@ -131,7 +152,7 @@ export function buildDiagnostics(input: DiagnosticsInput): DiagnosticsReport {
     { key: 'settingsRoutes', state: input.routesRegistered ? 'ok' : 'missing' },
     {
       key: 'modelsExtensionPackage',
-      state: isPackageInstalled('@deepseek-ai/dsh-client-ui-settings-models/package.json') ? 'ok' : 'missing',
+      state: isModelsExtensionInstalled() ? 'ok' : 'missing',
       detail: '@deepseek-ai/dsh-client-ui-settings-models',
     },
     {
@@ -141,7 +162,7 @@ export function buildDiagnostics(input: DiagnosticsInput): DiagnosticsReport {
     },
     {
       key: 'legacyPlugin',
-      state: isPackageInstalled('dsh-custom-provider-settings/package.json') ? 'ok' : 'missing',
+      state: isLegacyPluginInstalled() ? 'ok' : 'missing',
       detail: 'dsh-custom-provider-settings',
     },
   ]

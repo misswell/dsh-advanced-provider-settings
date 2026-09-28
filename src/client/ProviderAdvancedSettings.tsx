@@ -120,9 +120,13 @@ function Panel(props: {
   const [expanded, setExpanded] = useState<readonly string[]>([])
   const [headers, setHeaders] = useState<HeaderEntry[]>(() => headerEntriesOf(draft.committed.headers))
   const [retryState, setRetryState] = useState(() => toRetryEditorState(draft.committed.retryPolicy))
-  const [alwaysAck, setAlwaysAck] = useState(false)
   const [message, setMessage] = useState<{ tone: 'success' | 'warning' | 'danger'; text: string } | undefined>(undefined)
-  const [acknowledged, setAcknowledged] = useState(false)
+  // The acceptance starts from the persisted preference, read synchronously so
+  // a committed `always` policy does not lock the save button for the first
+  // frames of a session where the warning was already accepted once.
+  const [acknowledged, setAcknowledged] = useState(
+    () => own.value?.ui?.acknowledgedAlwaysRetry === true,
+  )
 
   const profile = draft.draft
 
@@ -146,6 +150,18 @@ function Panel(props: {
     if (own.value?.ui?.advancedExpanded === true) setOpen(true)
   }, [own, embedded])
 
+  // `ui.acknowledgedAlwaysRetry` records that the always-retry warning was
+  // accepted once. The lazy state initializer covers a namespace that is ready
+  // at mount; this covers one that arrives late. Applied once, like the
+  // expanded preference: re-applying would fight an in-session acknowledgement.
+  // Embedded panels hydrate too: an acceptance anywhere counts.
+  const ackHydrated = useRef(false)
+  useEffect(() => {
+    if (ackHydrated.current || own.status !== 'ready') return
+    ackHydrated.current = true
+    if (own.value?.ui?.acknowledgedAlwaysRetry === true) setAcknowledged(true)
+  }, [own])
+
   // The host owns the provider switch, so it needs to know an edit is unsaved:
   // switching would otherwise drop the draft without a word.
   useEffect(() => { onDirtyChange?.(draft.dirty) }, [draft.dirty, onDirtyChange])
@@ -159,6 +175,17 @@ function Panel(props: {
       .mutate([{ op: 'set', path: ['ui', 'advancedExpanded'], value: next }], ownScope.getSnapshot().revision)
       .catch(() => undefined)
   }, [ownScope, embedded])
+
+  // Acceptance is recorded in this plugin's own namespace, so the warning asks
+  // once per deployment rather than once per mount. A failed write costs a
+  // re-ask next open, never configuration.
+  const onAcknowledge = useCallback((): void => {
+    setAcknowledged(true)
+    if (ownScope === undefined) return
+    void ownScope
+      .mutate([{ op: 'set', path: ['ui', 'acknowledgedAlwaysRetry'], value: true }], ownScope.getSnapshot().revision)
+      .catch(() => undefined)
+  }, [ownScope])
 
   const summaries = useMemo(() => summarizeSections(profile), [profile])
   const summaryById = useMemo(
@@ -211,7 +238,7 @@ function Panel(props: {
 
   const headersInvalid = headers.length > 0 && hasBlockingRow(headers, t)
   const retryInvalid = retryIssues.size > 0
-  const alwaysUnacknowledged = profile.retryPolicy?.mode === 'always' && !alwaysAck && !acknowledged
+  const alwaysUnacknowledged = profile.retryPolicy?.mode === 'always' && !acknowledged
 
   const onSave = useCallback(async (): Promise<void> => {
     setMessage(undefined)
@@ -292,9 +319,11 @@ function Panel(props: {
             >
               <ModelsSection
                 t={t}
+                providerId={providerId}
                 profile={profile}
                 disabled={disabled}
                 onModelField={draft.setModelField}
+                onModelOverrideField={draft.setModelOverrideField}
               />
             </SectionShell>
 
@@ -331,8 +360,8 @@ function Panel(props: {
                 onChange={setRetryAndDraft}
                 issues={retryIssues}
                 disabled={disabled}
-                acknowledged={alwaysAck || acknowledged}
-                onAcknowledge={() => { setAlwaysAck(true); setAcknowledged(true) }}
+                acknowledged={acknowledged}
+                onAcknowledge={onAcknowledge}
               />
             </SectionShell>
 
@@ -428,6 +457,9 @@ function Panel(props: {
 
             {message === undefined ? null : <Notice tone={message.tone}>{message.text}</Notice>}
             {draft.dirty ? <span className={cls.hint}>{t('common.dirty')}</span> : null}
+            {/* The ack control lives inside the folded Retry section, so a save
+                it locks must say so here rather than stay silent. */}
+            {alwaysUnacknowledged ? <span className={cls.hint}>{t('common.ackNeeded')}</span> : null}
 
             <div className={cls.stickyActions}>
               <Button

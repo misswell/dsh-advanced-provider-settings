@@ -15,7 +15,7 @@
  * until success or cancellation, which is a different operational proposition
  * from "retry five times".
  */
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Button, Input, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   DEFAULT_RETRYABLE_CODES,
@@ -71,7 +71,6 @@ export function RetryEditor(props: {
   onAcknowledge: () => void
 }): ReactNode {
   const { t, state, onChange, disabled } = props
-  const [alerted, setAlerted] = useState(false)
 
   const activePreset = state === null
     ? 'harness-default'
@@ -117,7 +116,10 @@ export function RetryEditor(props: {
     })
   }
 
-  const alwaysNeedsAck = state?.mode === 'always' && !props.acknowledged && !alerted
+  // The gate must agree with the panel's save lock: both answer to the
+  // acknowledgement alone. A session-local "already alerted" flag would let
+  // choosing `always` hide the only control that can unlock the save button.
+  const alwaysNeedsAck = state?.mode === 'always' && !props.acknowledged
   const codesError = props.issues.get('retryableCodes') ?? props.issues.get('retryPolicy.retryableCodes')
   const delayIssue = (key: 'initialDelayMs' | 'maxDelayMs'): string | undefined =>
     props.issues.get(`retryPolicy.backoff.${key}`) ?? props.issues.get(`backoff.${key}`)
@@ -167,10 +169,7 @@ export function RetryEditor(props: {
                   aria-checked={state.mode === mode}
                   active={state.mode === mode}
                   disabled={disabled}
-                  onClick={() => {
-                    onChange({ ...state, mode })
-                    if (mode === 'always') setAlerted(true)
-                  }}
+                  onClick={() => { onChange({ ...state, mode }) }}
                 >
                   {t(`retry.mode.${mode}`)}
                 </Pill>
@@ -185,7 +184,7 @@ export function RetryEditor(props: {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => { props.onAcknowledge(); setAlerted(true) }}
+                  onClick={() => { props.onAcknowledge() }}
                 >
                   {t('retry.alwaysAck')}
                 </Button>

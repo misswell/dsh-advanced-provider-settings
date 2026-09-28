@@ -14,9 +14,21 @@
  * Everything here is pure, so the preservation guarantees are unit-testable
  * without a running Harness (sections 70, 73).
  */
-import { MANAGED_MODEL_KEYS, MANAGED_PROVIDER_KEYS } from './capabilities.js'
-import type { ProviderModelEntry, ProviderProfile, SettingsPathOp } from './types.js'
-import { modelFieldPath, providerFieldPath } from './types.js'
+import { MANAGED_MODEL_KEYS, MANAGED_PROVIDER_KEYS, MODEL_OVERRIDE_KEYS } from './capabilities.js'
+import { SECTION_PROVIDER_FIELDS, type AdvancedSectionId } from './summary.js'
+import type {
+  ProviderModelEntry,
+  ProviderModelOverride,
+  ProviderProfile,
+  SettingsPathOp,
+} from './types.js'
+import {
+  modelFieldPath,
+  modelOverrideEntryPath,
+  modelOverrideFieldPath,
+  modelOverrideMapPath,
+  providerFieldPath,
+} from './types.js'
 
 /**
  * Deep JSON equality with key-order independence.
@@ -112,29 +124,150 @@ export function resetProviderFields(
   providerId: string,
   profile: ProviderProfile,
   fields: readonly string[],
-  /** Model list to clear alongside, when the section owns per-model fields. */
-  models?: readonly ProviderModelEntry[],
 ): SettingsPathOp[] {
   const ops: SettingsPathOp[] = []
   for (const field of fields) {
     if (profile[field] !== undefined) ops.push({ op: 'unset', path: providerFieldPath(providerId, field) })
   }
-  if (models !== undefined) {
-    models.forEach((model, index) => {
-      for (const field of MANAGED_MODEL_KEYS) {
-        if (model[field] !== undefined) ops.push({ op: 'unset', path: modelFieldPath(providerId, index, field) })
-      }
-    })
+  return ops
+}
+
+/**
+ * Reset the per-model channel of one route: the managed keys of every `models`
+ * entry, and every `modelOverrides` entry in full.
+ *
+ * The two channels are deliberately asymmetric. A `models` entry belongs to the
+ * Models page, so only this plugin's three advanced keys are named and the
+ * identity/capacity fields the page owns survive. A `modelOverrides` entry
+ * exists only because this editor created it, so the whole entry goes.
+ *
+ * @param providerId - route id.
+ * @param profile - profile as read.
+ * @returns operations removing only per-model advanced configuration.
+ */
+export function resetModelFields(providerId: string, profile: ProviderProfile): SettingsPathOp[] {
+  const ops: SettingsPathOp[] = []
+  const models = Array.isArray(profile.models) ? profile.models : []
+  models.forEach((model, index) => {
+    for (const field of MANAGED_MODEL_KEYS) {
+      if (model[field] !== undefined) ops.push({ op: 'unset', path: modelFieldPath(providerId, index, field) })
+    }
+  })
+  ops.push(...clearModelOverrides(providerId, profile.modelOverrides))
+  return ops
+}
+
+/**
+ * Diff one `modelOverrides` entry, and drop the entry itself once it holds
+ * nothing.
+ *
+ * An entry left as `{}` is schema-legal but is not configuration: it would show
+ * as an override in the picker while changing nothing. So the last field
+ * removed also removes the dict key.
+ *
+ * @param providerId - route id.
+ * @param modelId - catalog model id (the dict key).
+ * @param before - entry as read, or undefined when absent.
+ * @param after - entry as edited, or undefined when the override is gone.
+ * @returns the minimal operations.
+ */
+export function diffManagedModelOverride(
+  providerId: string,
+  modelId: string,
+  before: ProviderModelOverride | undefined,
+  after: ProviderModelOverride | undefined,
+): SettingsPathOp[] {
+  const ops: SettingsPathOp[] = []
+  for (const field of MODEL_OVERRIDE_KEYS) {
+    ops.push(
+      ...setOrUnset(modelOverrideFieldPath(providerId, modelId, field), before?.[field], after?.[field]),
+    )
+  }
+  if (before !== undefined && overrideEntryIsEmpty(after)) {
+    ops.push({ op: 'unset', path: modelOverrideEntryPath(providerId, modelId) })
   }
   return ops
+}
+
+/**
+ * Diff every `modelOverrides` entry of one route.
+ * @param providerId - route id.
+ * @param before - mapping as read, or undefined when absent.
+ * @param after - mapping as edited, or undefined when empty.
+ * @returns the minimal operations, entry by entry, then the mapping itself.
+ */
+export function diffManagedModelOverrides(
+  providerId: string,
+  before: Record<string, ProviderModelOverride> | undefined,
+  after: Record<string, ProviderModelOverride> | undefined,
+): SettingsPathOp[] {
+  const ops: SettingsPathOp[] = []
+  const ids = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])]
+  for (const id of ids) {
+    ops.push(...diffManagedModelOverride(providerId, id, before?.[id], after?.[id]))
+  }
+  // Leaving `modelOverrides: {}` behind would be an empty dict in the user's
+  // YAML, and the schema's own default is no key at all.
+  if (Object.keys(before ?? {}).length > 0 && Object.keys(after ?? {}).length === 0) {
+    ops.push({ op: 'unset', path: modelOverrideMapPath(providerId) })
+  }
+  return ops
+}
+
+/**
+ * Reset the named sections.
+ *
+ * Sections are resolved through {@link SECTION_PROVIDER_FIELDS} and never used
+ * as field names directly: the ids are the UI's vocabulary (`timeout` covers
+ * three fields, `network` none at all), and treating one as a provider key is
+ * how a reset would unsets a whole `models` list.
+ *
+ * @param providerId - route id.
+ * @param profile - profile as read.
+ * @param sections - section ids to clear.
+ * @returns operations removing only those sections' managed keys.
+ */
+export function resetSections(
+  providerId: string,
+  profile: ProviderProfile,
+  sections: readonly AdvancedSectionId[],
+): SettingsPathOp[] {
+  const ops: SettingsPathOp[] = []
+  for (const section of sections) {
+    ops.push(...resetProviderFields(providerId, profile, SECTION_PROVIDER_FIELDS[section]))
+    if (section === 'models') ops.push(...resetModelFields(providerId, profile))
+  }
+  return ops
+}
+
+/**
+ * Remove every `modelOverrides` entry of one route.
+ * @param providerId - route id.
+ * @param overrides - mapping as read.
+ * @returns operations clearing every entry and the mapping.
+ */
+export function clearModelOverrides(
+  providerId: string,
+  overrides: Record<string, ProviderModelOverride> | undefined,
+): SettingsPathOp[] {
+  return diffManagedModelOverrides(providerId, overrides, undefined)
+}
+
+/** Whether an override entry carries no value at all. */
+function overrideEntryIsEmpty(entry: ProviderModelOverride | undefined): boolean {
+  if (entry === undefined || entry === null) return true
+  return Object.values(entry).every((value) => value === undefined)
 }
 
 /**
  * Reset every advanced setting on a provider, including per-model extras.
  *
  * Deliberately narrow: identity, endpoint, credential reference, model ids,
- * context windows and max tokens are never named, so Reset All cannot damage a
- * working route (spec section 48).
+ * context windows and max tokens of LISTED models are never named, so Reset All
+ * cannot damage a working route (spec section 48). A `modelOverrides` entry is
+ * the exception, and only because this plugin's editor is the channel that
+ * creates it: the whole entry goes, which restores the installed catalog
+ * declaration for that model.
  *
  * @param providerId - route id.
  * @param profile - profile as read.
@@ -142,14 +275,7 @@ export function resetProviderFields(
  */
 export function resetAllAdvanced(providerId: string, profile: ProviderProfile): SettingsPathOp[] {
   const ops = resetProviderFields(providerId, profile, MANAGED_PROVIDER_KEYS)
-  const models = Array.isArray(profile.models) ? profile.models : []
-  models.forEach((model, index) => {
-    for (const field of MANAGED_MODEL_KEYS) {
-      if (model[field] !== undefined) {
-        ops.push({ op: 'unset', path: modelFieldPath(providerId, index, field) })
-      }
-    }
-  })
+  ops.push(...resetModelFields(providerId, profile))
   return ops
 }
 
@@ -213,10 +339,15 @@ export function diffManagedProviderConfig(
   const ops = diffManagedProviderFields(providerId, before, after)
   const beforeModels = Array.isArray(before.models) ? before.models : []
   const afterModels = Array.isArray(after.models) ? after.models : []
-  if (beforeModels.length !== afterModels.length) return ops
-  for (let index = 0; index < afterModels.length; index += 1) {
-    ops.push(...diffManagedModelFields(providerId, index, beforeModels[index], afterModels[index]))
+  if (beforeModels.length === afterModels.length) {
+    for (let index = 0; index < afterModels.length; index += 1) {
+      ops.push(...diffManagedModelFields(providerId, index, beforeModels[index], afterModels[index]))
+    }
   }
+  // The two per-model channels are mutually exclusive in the schema (a
+  // non-empty `models` list refuses `modelOverrides`), so in list mode the
+  // override mapping is untouched on both sides and this diff is empty.
+  ops.push(...diffManagedModelOverrides(providerId, before.modelOverrides, after.modelOverrides))
   return ops
 }
 

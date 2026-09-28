@@ -6,9 +6,9 @@
  * The projection returns structured facts, never sentences — every string the
  * user reads comes from the locale files.
  */
-import { COMPAT_FIELDS, MANAGED_MODEL_KEYS } from './capabilities.js'
+import { COMPAT_FIELDS, MANAGED_MODEL_KEYS, MODEL_OVERRIDE_KEYS } from './capabilities.js'
 import { matchRetryPreset } from './retry.js'
-import type { ProviderProfile } from './types.js'
+import type { ProviderModelOverride, ProviderProfile } from './types.js'
 import { claimsImageSupport } from './vision.js'
 
 /** Identifiers of the advanced sections. */
@@ -21,6 +21,26 @@ export type AdvancedSectionId =
   | 'reasoning'
   | 'compatibility'
   | 'models'
+
+/**
+ * The provider-level fields each section owns, for a section-scoped reset.
+ *
+ * `models` owns none: its whole subject is the per-model channel, which lives
+ * outside the provider's own key space. Keeping this table beside
+ * {@link AdvancedSectionId} is what stops a section id from ever being mistaken
+ * for a provider field name — which is how a "reset this section" would delete
+ * an entire `models` list.
+ */
+export const SECTION_PROVIDER_FIELDS: Record<AdvancedSectionId, readonly string[]> = {
+  headers: ['headers'],
+  retry: ['retryPolicy'],
+  timeout: ['timeoutMs', 'streamIdleTimeoutMs', 'websocketConnectTimeoutMs'],
+  transport: ['transport', 'cacheRetention'],
+  vision: ['defaultInput', 'maxRequestImageBytes', 'requestImagePixelBudget', 'requestImageMaxBytes'],
+  reasoning: ['reasoning', 'thinkingBudgets'],
+  compatibility: ['compat'],
+  models: [],
+}
 
 /** Structured status of one section, translated at render time. */
 export type SectionStatus =
@@ -60,14 +80,30 @@ export function compatOverrideCount(profile: ProviderProfile): number {
 }
 
 /**
- * Count models whose stored declaration claims image support, plus the
- * provider default when it does.
+ * Count models whose stored declaration claims image support: the entries of a
+ * `models` list, plus any catalog model an override declares images for.
  * @param profile - the profile as read.
  * @returns the image-claiming count.
  */
 export function visionModelCount(profile: ProviderProfile): number {
   const models = Array.isArray(profile.models) ? profile.models : []
+  const overrides = Object.values(profile.modelOverrides ?? {})
   return models.filter((model) => claimsImageSupport(model.input)).length
+    + overrides.filter((override) => claimsImageSupport(override?.input)).length
+}
+
+/** Every `modelOverrides` entry that carries at least one value. */
+export function configuredModelOverrides(
+  profile: ProviderProfile,
+): [string, ProviderModelOverride][] {
+  return Object.entries(profile.modelOverrides ?? {})
+    .filter(([, override]) => overrideEntryCount(override) > 0)
+}
+
+/** How many fields one override entry sets. */
+export function overrideEntryCount(override: ProviderModelOverride | undefined): number {
+  if (override === undefined || override === null) return 0
+  return MODEL_OVERRIDE_KEYS.filter((field) => override[field] !== undefined).length
 }
 
 /** Whether the provider default declares image input. */
@@ -162,12 +198,13 @@ function compatStatus(profile: ProviderProfile): SectionStatus {
   return count === 0 ? { kind: 'default' } : { kind: 'count', count }
 }
 
-/** Models: how many entries carry a plugin-managed override. */
+/** Models: how many models carry a per-model override, on either channel. */
 function modelsStatus(profile: ProviderProfile): SectionStatus {
   const models = Array.isArray(profile.models) ? profile.models : []
-  const count = models.filter((model) =>
+  const listed = models.filter((model) =>
     MANAGED_MODEL_KEYS.some((field) => model[field] !== undefined),
   ).length
+  const count = listed + configuredModelOverrides(profile).length
   return count === 0 ? { kind: 'default' } : { kind: 'count', count }
 }
 
@@ -246,8 +283,12 @@ export function buildPreview(profile: ProviderProfile): PreviewLine[] {
   }
 
   const models = Array.isArray(profile.models) ? profile.models : []
+  const overrides = configuredModelOverrides(profile)
   const overridden = models.filter((model) => model.reasoningEfforts !== undefined).length
+    + overrides.filter(([, override]) => override.reasoningEfforts !== undefined).length
   if (overridden > 0) line('reasoningEfforts', String(overridden))
+
+  if (overrides.length > 0) line('modelOverrides', String(overrides.length))
 
   return lines
 }

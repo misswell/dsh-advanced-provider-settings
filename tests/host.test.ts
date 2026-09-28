@@ -450,6 +450,59 @@ describe('effective-headers op', () => {
   })
 })
 
+describe('catalog-models op', () => {
+  it('answers the models the route serves, so the editor can key overrides by id', async () => {
+    const response = await dispatch(depsFixture({
+      llmCatalog: {
+        listModels: async (provider) => {
+          expect(provider).toBe('gateway')
+          return [
+            { id: 'fast', name: 'Fast', inputModalities: ['text'] },
+            { id: 'vision', name: 'Vision', inputModalities: ['text', 'image'] },
+          ]
+        },
+      },
+    }), { op: 'catalog-models', payload: { providerId: 'gateway' } })
+
+    expect(response.ok).toBe(true)
+    expect(response.result).toEqual({
+      models: [
+        { id: 'fast', name: 'Fast', input: ['text'] },
+        { id: 'vision', name: 'Vision', input: ['text', 'image'] },
+      ],
+    })
+  })
+
+  it('says the host cannot list rather than pretending the route has no models', async () => {
+    // A host whose llm service predates this op must not look like a route with
+    // an empty catalog: the two need different copy and different user action.
+    const response = await dispatch(depsFixture(), { op: 'catalog-models', payload: { providerId: 'gateway' } })
+    expect(response.ok).toBe(true)
+    expect(response.result).toEqual({ models: [], errorCode: 'service-unavailable' })
+  })
+
+  it('refuses a payload with no provider id', async () => {
+    const response = await dispatch(depsFixture({
+      llmCatalog: { listModels: async () => [{ id: 'fast' }] },
+    }), { op: 'catalog-models', payload: { providerId: 7 } })
+    expect(response.ok).toBe(true)
+    expect(response.result).toEqual({ models: [], errorCode: 'no-provider' })
+  })
+
+  it('reports a failing adapter without leaking the raw error object', async () => {
+    const response = await dispatch(depsFixture({
+      llmCatalog: {
+        listModels: async () => { throw Object.assign(new Error('adapter exploded'), { code: 'INTERNAL' }) },
+      },
+    }), { op: 'catalog-models', payload: { providerId: 'gateway' } })
+    expect(response.ok).toBe(true)
+    const result = response.result as { models: unknown[]; errorCode: string; detail?: string }
+    expect(result.models).toEqual([])
+    expect(result.errorCode).toBe('listing-failed')
+    expect(result.detail).toBe('adapter exploded')
+  })
+})
+
 describe('validate op', () => {
   it('reports a model-level compat field the protocol does not offer', async () => {
     const response = await dispatch(depsFixture(), {

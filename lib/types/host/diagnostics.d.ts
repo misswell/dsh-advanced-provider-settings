@@ -26,11 +26,16 @@ export interface DiagnosticsReport {
  */
 export declare function detectDshVersion(): string | undefined;
 /**
- * Whether a package is installed and resolvable from the plugin.
- * @param specifier - a `package.json` specifier to resolve.
- * @returns whether resolution succeeded.
+ * Whether the models-page extension package is installed. Resolved through a
+ * literal specifier: the candidate is compile-time knowledge, and a variable
+ * require is an injection-shaped call.
  */
-export declare function isPackageInstalled(specifier: string): boolean;
+export declare function isModelsExtensionInstalled(): boolean;
+/**
+ * Whether the retired community plugin is still installed beside this one.
+ * Resolved through a literal specifier for the same reason.
+ */
+export declare function isLegacyPluginInstalled(): boolean;
 /** Inputs the host half can observe cheaply. */
 export interface DiagnosticsInput {
     pluginVersion: string;

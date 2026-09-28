@@ -214,6 +214,30 @@ describe('summary', () => {
     }
     expect(summarizeSections(profile).find((s) => s.id === 'models')?.status).toEqual({ kind: 'count', count: 2 })
   })
+
+  it('counts catalog overrides alongside listed models', () => {
+    // The two channels are exclusive, but the section badge answers "how much
+    // per-model configuration is there", so it must read whichever is in play.
+    const profile: ProviderProfile = {
+      ...empty,
+      models: undefined,
+      modelOverrides: {
+        fast: { input: ['text'] },
+        vision: { reasoningEfforts: { high: 'high' }, maxTokens: 4096 },
+        empty: {},
+      },
+    }
+    expect(summarizeSections(profile).find((s) => s.id === 'models')?.status).toEqual({ kind: 'count', count: 2 })
+  })
+
+  it('counts an image-capable catalog override as an image-capable model', () => {
+    const profile: ProviderProfile = {
+      ...empty,
+      models: undefined,
+      modelOverrides: { vision: { input: ['text', 'image'] }, fast: { input: ['text'] }, bare: {} },
+    }
+    expect(visionModelCount(profile)).toBe(1)
+  })
 })
 
 describe('preview (section 41)', () => {
@@ -244,5 +268,18 @@ describe('preview (section 41)', () => {
   it('omits every unset section instead of printing defaults', () => {
     const lines = buildPreview({ api: 'openai-completions', baseURL: 'https://x.test', models: [] })
     expect(lines).toEqual([])
+  })
+
+  it('names the catalog models an override touches', () => {
+    const lines = buildPreview({
+      api: 'openai-completions',
+      baseURL: 'https://x.test',
+      modelOverrides: { vision: { maxTokens: 4096 }, fast: {} },
+    })
+    const map = new Map(lines.map((line) => [line.key, line.value]))
+    // An empty entry changes nothing and must not inflate the count, and the
+    // preview counts rather than naming the models — ids stay out of it.
+    expect(map.get('modelOverrides')).toBe('1')
+    for (const line of lines) expect(line.value).not.toContain('vision')
   })
 })

@@ -84,5 +84,11 @@ export declare function toInputChoice(input: readonly Modality[] | undefined): I
  * @returns the modality list to write, or `undefined` to unset the key.
  */
 export declare function fromInputChoice(choice: InputChoice): Modality[] | undefined;
-/** Whether a stored profile / model declaration claims image support. */
-export declare function claimsImageSupport(input: readonly Modality[] | undefined): boolean;
+/**
+ * Whether a stored profile / model declaration claims image support.
+ *
+ * Accepts a plain string list rather than only {@link Modality}: the installed
+ * catalog reports modalities as strings, and the question asked here — does the
+ * declaration include images — is the same one for either spelling.
+ */
+export declare function claimsImageSupport(input: readonly string[] | undefined): boolean;
