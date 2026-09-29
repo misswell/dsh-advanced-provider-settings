@@ -282,7 +282,7 @@ export const en = {
     'Your global User-Agent replaces the DeepSeek Harness attribution these requests would otherwise send.',
   'preview.advisory.reserved-provider-header':
     '{name} is reserved: DeepSeek Harness strips a provider-level {name} and sends its own attribution. Move it to the global header list to have it take effect.',
-  'preview.advisory.authorization-with-credential':
+  'preview.advisory.authorization-overrides-key':
     'A configured {name} header overrides the credential DeepSeek Harness resolved for this route.',
   'preview.inherited': 'inherit',
 

@@ -286,7 +286,7 @@ export const zh: Record<LocaleKey, string> = {
     '你在全局设置的 User-Agent 会替换这些请求原本携带的 DeepSeek Harness 归属标识。',
   'preview.advisory.reserved-provider-header':
     '{name} 是保留字段：DeepSeek Harness 会剥掉 Provider 级的 {name} 并发自己的归属标识。想让它生效，请移到全局 Header 列表。',
-  'preview.advisory.authorization-with-credential':
+  'preview.advisory.authorization-overrides-key':
     '你配置的 {name} 请求头会覆盖 DeepSeek Harness 为该路由解析出的凭据。',
   'preview.inherited': '继承',
 

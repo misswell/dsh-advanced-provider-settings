@@ -248,7 +248,7 @@ export declare const en: {
     readonly 'preview.advisories': "Warnings";
     readonly 'preview.attributionOverridden': "Your global User-Agent replaces the DeepSeek Harness attribution these requests would otherwise send.";
     readonly 'preview.advisory.reserved-provider-header': "{name} is reserved: DeepSeek Harness strips a provider-level {name} and sends its own attribution. Move it to the global header list to have it take effect.";
-    readonly 'preview.advisory.authorization-with-credential': "A configured {name} header overrides the credential DeepSeek Harness resolved for this route.";
+    readonly 'preview.advisory.authorization-overrides-key': "A configured {name} header overrides the credential DeepSeek Harness resolved for this route.";
     readonly 'preview.inherited': "inherit";
     readonly 'card.unconfigured': "Configure this provider to unlock advanced settings.";
     readonly 'test.title': "Test provider";

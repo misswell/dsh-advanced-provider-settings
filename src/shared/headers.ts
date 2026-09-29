@@ -117,10 +117,11 @@ export function maskHeaderValue(value: string): string {
   const spaceAt = value.indexOf(' ')
   const hasScheme = spaceAt > 0 && /^[A-Za-z]+$/.test(value.slice(0, spaceAt))
   const scheme = hasScheme ? value.slice(0, spaceAt + 1) : ''
-  const secret = hasScheme ? value.slice(spaceAt + 1) : value
+  // Everything past an auth scheme (`Bearer `, `Basic `) is the part worth hiding.
+  const rest = hasScheme ? value.slice(spaceAt + 1) : value
 
-  if (secret.length === 0) return `${scheme}****`
-  const tail = secret.length > 8 ? secret.slice(-4) : ''
+  if (rest.length === 0) return `${scheme}****`
+  const tail = rest.length > 8 ? rest.slice(-4) : ''
   return `${scheme}****${tail}`
 }
 

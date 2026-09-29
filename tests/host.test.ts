@@ -436,10 +436,10 @@ describe('effective-headers op', () => {
 
   it('names every provider header that can displace the resolved credential', () => {
     expect(headerAdvisories([{ name: 'Authorization', value: 'Bearer x' }], 'KEY')).toEqual([
-      { code: 'authorization-with-credential', name: 'Authorization' },
+      { code: 'authorization-overrides-key', name: 'Authorization' },
     ])
     expect(headerAdvisories([{ name: 'x-api-key', value: 'k' }], 'KEY')).toEqual([
-      { code: 'authorization-with-credential', name: 'x-api-key' },
+      { code: 'authorization-overrides-key', name: 'x-api-key' },
     ])
   })
 

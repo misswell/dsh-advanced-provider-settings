@@ -80,8 +80,8 @@ export function resolveEffectiveHeaders(options: {
 
 /** A provider header the user should be told about before trusting it. */
 export interface HeaderAdvisory {
-  /** `reserved` — Harness overwrites it. `credential` — it can defeat the stored key. */
-  code: 'reserved-provider-header' | 'credential-overrides-key' | 'authorization-with-credential'
+  /** `reserved` — Harness overwrites it. `authorization-overrides-key` — it can defeat the stored key. */
+  code: 'reserved-provider-header' | 'authorization-overrides-key'
   /** The offending header name as the user wrote it. */
   name: string
 }
@@ -115,7 +115,7 @@ export function headerAdvisories(
       continue
     }
     if ((lower === 'authorization' || lower === 'x-api-key') && credentialRef !== undefined) {
-      advisories.push({ code: 'authorization-with-credential', name: header.name })
+      advisories.push({ code: 'authorization-overrides-key', name: header.name })
     }
   }
   return advisories
