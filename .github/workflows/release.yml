@@ -70,7 +70,7 @@ jobs:
             dsh plugin --profile web add https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.tarball.outputs.name }}
             ```
 
-            Or from npm once published:
+            Or from npm:
 
             ```bash
             dsh plugin --profile web add dsh-advanced-provider-settings

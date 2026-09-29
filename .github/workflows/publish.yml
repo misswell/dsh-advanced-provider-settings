@@ -1,0 +1,95 @@
+# npm publishing.
+#
+# One tag reaches both channels: `release.yml` attaches the tarball to the GitHub
+# release, this workflow publishes the same commit to npm. Neither builds on the
+# consumer's machine — `lib/` is committed, and `prepack` rebuilds it here.
+#
+# Needs the repository secret `NPM_TOKEN`: an npm *automation* token, or a
+# granular token with read and write on this package. `id-token: write` is for
+# the provenance attestation npm attaches to the tarball.
+#
+# `workflow_dispatch` takes the tag to publish, so a retry, a first publish or a
+# backfill never has to move a tag.
+name: Publish to npm
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to publish, e.g. v0.4.4 (empty: the ref that triggered the run)'
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: publish the npm package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      # A tag that disagrees with the manifest would publish a version nobody
+      # asked for. The two are bumped together on purpose.
+      - name: Check the tag against the manifest
+        id: version
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "v${version}" != "${tag}" ]; then
+            echo "tag ${tag} does not match package.json v${version}" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify before publishing
+        run: |
+          npm run build
+          npm run typecheck
+          npm run lint
+          npm test
+
+      # Re-running this workflow for a version that already shipped should not
+      # fail on npm's duplicate-version rejection; step aside instead.
+      - name: Check whether npm already has this version
+        id: shipped
+        run: |
+          if npm view "dsh-advanced-provider-settings@${{ steps.version.outputs.version }}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "dsh-advanced-provider-settings@${{ steps.version.outputs.version }} is already on npm."
+          fi
+
+      # A missing credential is a setup state, not a broken release: say so in the
+      # run summary instead of failing the tag, and publish later by running this
+      # workflow manually with the tag. An *expired* token still fails loudly below.
+      - name: Check the npm credential
+        id: credentials
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "::warning title=No NPM_TOKEN::Skipped the npm publish. Add the repository secret NPM_TOKEN, then run this workflow manually with tag ${{ inputs.tag || github.ref_name }}."
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        if: steps.shipped.outputs.exists != 'true' && steps.credentials.outputs.missing != 'true'
+        run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

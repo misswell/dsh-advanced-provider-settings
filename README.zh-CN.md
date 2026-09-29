@@ -20,7 +20,7 @@ OpenAI 兼容 Provider 那些原本只能手改 YAML 的配置项，变成看得
 另一个字段名、厂商根本没实现的请求字段照发不误。本插件让你按路由、按模型把方言声明清楚，把思考
 档位阶梯和各档 token 预算配好，并在请求中途失败之前就看清到底会发出什么。
 
-> **状态：**`v0.4.3`，已在 DeepSeek Harness `0.1.7-alpha.1` 上验证。
+> **状态：**`v0.4.4`，已在 DeepSeek Harness `0.1.7-alpha.1` 上验证。
 
 ---
 
@@ -114,12 +114,12 @@ DeepSeek Harness 的 Provider schema 设计得相当完整，但「模型」页�
 
 ```bash
 # 从 GitHub Release 的 tgz 安装
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.3/dsh-advanced-provider-settings-0.4.3.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.4/dsh-advanced-provider-settings-0.4.4.tgz
 
-# 发布到 npm 后
+# 从 npm 安装
 dsh plugin --profile web add dsh-advanced-provider-settings
 
-# 直接从仓库安装 —— 无需构建，也无需发布 npm
+# 直接从仓库安装 —— 无需构建
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 ```
 
@@ -550,6 +550,23 @@ npm pack --dry-run   # 打包检查
 
 本插件**刻意不** require `dsh-client-locale` 与 `dsh-client-ui-settings`——它们不在该表里。locale
 与 settings 是作为 cordis 服务访问的。有测试针对构建产物断言这一点。
+
+### 发布新版本
+
+版本号写在**两处**，而构建会比对它们：`package.json`（连同 `package-lock.json`）与
+`src/shared/capabilities.ts` 里的 `PLUGIN_VERSION`。两处都改，重建 `lib/`（它是提交进仓库的，
+`github:` 安装直接用这份产物），更新 `CHANGELOG.md`，然后：
+
+```bash
+npm run build && npm run typecheck && npm run lint && npm test
+git commit -am "chore(release): vX.Y.Z — <改了什么>"
+git tag -a vX.Y.Z -m "vX.Y.Z — <改了什么>"
+git push origin main && git push origin vX.Y.Z
+```
+
+tag 驱动两个渠道：`Release` 把 tgz 挂到 GitHub Release，`Publish to npm` 把同一个提交发到 npm 并附带
+provenance 证明。两者都会重跑上面的门禁；npm 那个 job 需要仓库 secret `NPM_TOKEN`。要重试或补发一个
+已存在的 tag，手动运行 `Publish to npm` 并把该 tag 作为输入即可——npm 上已有该版本时它会自动跳过。
 
 ### 目录结构
 

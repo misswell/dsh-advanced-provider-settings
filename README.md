@@ -25,7 +25,7 @@ not implement is sent anyway. This plugin lets you declare the dialect per route
 the thinking ladder and its token budgets, and see what will leave the machine before a request fails
 halfway through a session.
 
-> **Status:** `v0.4.3`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
+> **Status:** `v0.4.4`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
 
 ---
 
@@ -126,13 +126,13 @@ allowed to write to the profile.
 `dsh plugin` manages this profile, and all three sources work:
 
 ```bash
-# Straight from the repository — no build step, no npm publish
+# Straight from the repository — no build step
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 
 # From a GitHub release tarball (a fixed, content-hashed artifact)
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.3/dsh-advanced-provider-settings-0.4.3.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.4/dsh-advanced-provider-settings-0.4.4.tgz
 
-# From npm, once published
+# From npm
 dsh plugin --profile web add dsh-advanced-provider-settings
 ```
 
@@ -614,6 +614,24 @@ are restricted to the shell's static module table:
 By design this plugin requires **none** of `dsh-client-locale` or `dsh-client-ui-settings` — they
 are not in that table. It reaches locale and settings as cordis services instead. A test asserts
 this against the built bundle.
+
+### Releasing
+
+The version lives in **two** places and the build compares them: `package.json` (with
+`package-lock.json`) and `PLUGIN_VERSION` in `src/shared/capabilities.ts`. Bump both, rebuild `lib/`
+(it is committed, and a `github:` install consumes it as-is), update `CHANGELOG.md`, then:
+
+```bash
+npm run build && npm run typecheck && npm run lint && npm test
+git commit -am "chore(release): vX.Y.Z — <what changed>"
+git tag -a vX.Y.Z -m "vX.Y.Z — <what changed>"
+git push origin main && git push origin vX.Y.Z
+```
+
+The tag drives both channels: `Release` attaches the tarball to the GitHub release, and `Publish to
+npm` publishes the same commit to npm with a provenance attestation. Both re-run the gates above; the
+npm job needs the repository secret `NPM_TOKEN`. To retry or backfill a tag that already exists, run
+`Publish to npm` manually with that tag as input — it steps aside if npm already has the version.
 
 ### Layout
 

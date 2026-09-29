@@ -5,6 +5,27 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] — 2026-09-29
+
+### Added
+
+**The package ships to npm, and the tag that releases it publishes it there.**
+`dsh plugin --profile web add dsh-advanced-provider-settings` now resolves from the default registry,
+instead of being the one install route the README had to qualify with "once published".
+
+- **A `Publish to npm` workflow** publishes the tag's commit to `registry.npmjs.org` with an npm
+  provenance attestation, after the same build, typecheck, lint and test gate `Release` runs. It needs
+  the repository secret `NPM_TOKEN`. Re-running it for a version npm already has steps aside instead
+  of failing, and `workflow_dispatch` takes the tag to publish, so a retry or a backfill never has to
+  move a tag.
+- **`Development` documents how to cut a release**, including the two places the version lives —
+  `package.json` (with `package-lock.json`) and `PLUGIN_VERSION` in `src/shared/capabilities.ts`,
+  which the build compares — and the fact that `lib/` has to be rebuilt and committed, because a
+  `github:` install consumes it as-is.
+- **The release notes and both READMEs dropped "once published"** from the npm line.
+
+No behaviour changed: `lib/` differs from 0.4.3 in the version string only.
+
 ## [0.4.3] — 2026-09-29
 
 ### Changed
@@ -473,6 +494,7 @@ active, and offers to import its global header mapping without overwriting heade
 - Not supported on DeepSeek Harness `0.1.4` or earlier: the extension seat and the client-side
   settings mutation API this plugin depends on do not exist there.
 
+[0.4.4]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.4
 [0.4.3]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.3
 [0.4.2]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.2
 [0.4.1]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.1

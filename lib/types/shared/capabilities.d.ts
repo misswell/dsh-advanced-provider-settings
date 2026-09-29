@@ -21,7 +21,7 @@
 /** The DSH build every constant in this file was verified against. */
 export declare const VERIFIED_DSH_VERSION = "0.1.7-alpha.1";
 /** This plugin's own version. Kept in step with package.json by the build check. */
-export declare const PLUGIN_VERSION = "0.4.3";
+export declare const PLUGIN_VERSION = "0.4.4";
 /** Namespace owning the OpenAI-compatible provider routes. */
 export declare const PROVIDER_NAMESPACE = "llm-pi-ai";
 /** Cordis / locale / registrant name. This is the package name, not a namespace. */
