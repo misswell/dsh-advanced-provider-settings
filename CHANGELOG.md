@@ -5,6 +5,36 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-09-29
+
+### Changed
+
+**Both READMEs now work through the case this plugin exists for — a third-party DeepSeek endpoint —
+instead of listing the fields it edits.** Compatibility is detected from the provider id and the base
+URL, and only a URL containing `deepseek.com` is detected as DeepSeek, so every other host that serves
+DeepSeek models gets OpenAI-shaped defaults: the thinking level is built in a dialect the endpoint does
+not understand, `max_completion_tokens` is sent where it wants `max_tokens`, and `store` goes to a
+server that does not take it. The documentation names those five mismatches and walks the switches that
+fix them.
+
+- **Three worked examples**, each ending in the YAML the plugin actually writes and in what leaves the
+  machine: a third-party DeepSeek route carrying a reasoning and a non-reasoning model, the same models
+  on a catalog route through `modelOverrides.<id>`, and a gateway that whitelists clients.
+- **A "thinking levels, in depth" section**: the ladder, the fold of `xhigh`/`max` onto `high`, the
+  per-level token budgets and their clamping to the room the request leaves for an answer, the
+  `off: null` state that keeps `off` selectable, and the compat switches that decide the wire shape a
+  level takes.
+- **Two more behaviours named**, because they bite on exactly these routes: a route-level level is
+  validated against the model that receives the request and refused by name rather than downgraded, and
+  the thinking-dialect switches are Chat Completions fields that no other protocol reads.
+- **Known issues gains both ends of the same rope**: budgets the Harness schema does not validate, and
+  mapping strings whose shape is checked but whose acceptance only the endpoint knows.
+
+Every constant and wire shape in the examples was read out of the installed `0.1.7-alpha.1` build —
+pi-ai's `detectCompat` and its `deepseek` dispatch, and `dsh-llm-pi-ai`'s `resolveModelReasoning` — and
+every control name quoted matches the shipped `en-US` and `zh-CN` dictionaries. No source file changed
+in this release; `PLUGIN_VERSION` moves with `package.json`, as the build check requires.
+
 ## [0.4.0] — 2026-09-28
 
 ### Added
@@ -391,6 +421,7 @@ active, and offers to import its global header mapping without overwriting heade
 - Not supported on DeepSeek Harness `0.1.4` or earlier: the extension seat and the client-side
   settings mutation API this plugin depends on do not exist there.
 
+[0.4.1]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.1
 [0.4.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.0
 [0.3.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.3.0
 [0.2.1]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.2.1

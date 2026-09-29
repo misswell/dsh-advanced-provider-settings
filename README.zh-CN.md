@@ -20,7 +20,7 @@ OpenAI 兼容 Provider 那些原本只能手改 YAML 的配置项，变成看得
 另一个字段名、厂商根本没实现的请求字段照发不误。本插件让你按路由、按模型把方言声明清楚，把思考
 档位阶梯和各档 token 预算配好，并在请求中途失败之前就看清到底会发出什么。
 
-> **状态：**`v0.4.0`，已在 DeepSeek Harness `0.1.7-alpha.1` 上验证。
+> **状态：**`v0.4.1`，已在 DeepSeek Harness `0.1.7-alpha.1` 上验证。
 
 ---
 
@@ -106,7 +106,7 @@ DeepSeek Harness 的 Provider schema 设计得相当完整，但「模型」页�
 
 ```bash
 # 从 GitHub Release 的 tgz 安装
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.0/dsh-advanced-provider-settings-0.4.0.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.1/dsh-advanced-provider-settings-0.4.1.tgz
 
 # 发布到 npm 后
 dsh plugin --profile web add dsh-advanced-provider-settings

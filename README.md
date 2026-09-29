@@ -25,7 +25,7 @@ not implement is sent anyway. This plugin lets you declare the dialect per route
 the thinking ladder and its token budgets, and see what will leave the machine before a request fails
 halfway through a session.
 
-> **Status:** `v0.4.0`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
+> **Status:** `v0.4.1`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
 
 ---
 
@@ -121,7 +121,7 @@ Requires DeepSeek Harness `0.1.7` or a compatible build, and Node.js 20+.
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 
 # From a GitHub release tarball (a fixed, content-hashed artifact)
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.0/dsh-advanced-provider-settings-0.4.0.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.1/dsh-advanced-provider-settings-0.4.1.tgz
 
 # From npm, once published
 dsh plugin --profile web add dsh-advanced-provider-settings
