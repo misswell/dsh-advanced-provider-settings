@@ -25,7 +25,7 @@ not implement is sent anyway. This plugin lets you declare the dialect per route
 the thinking ladder and its token budgets, and see what will leave the machine before a request fails
 halfway through a session.
 
-> **Status:** `v0.4.4`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
+> **Status:** `v0.4.5`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
 
 ---
 
@@ -130,7 +130,7 @@ allowed to write to the profile.
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 
 # From a GitHub release tarball (a fixed, content-hashed artifact)
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.4/dsh-advanced-provider-settings-0.4.4.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.5/dsh-advanced-provider-settings-0.4.5.tgz
 
 # From npm
 dsh plugin --profile web add dsh-advanced-provider-settings
@@ -273,8 +273,11 @@ per-model maps decide (see [behaviour 4](#4-a-route-level-thinking-level-must-be
 ### The per-model map
 
 **Per model → Model level mapping** is one box per level, and the box is the exact string that level
-sends. A level left blank is *pinned unsupported* for that model, so choosing it is refused by name
-instead of being silently dropped. The consequences are worth stating precisely:
+sends. Each box is followed by the state that level is in — *sends `low`*, *Not supported*, *Inherit*,
+*sends nothing* — because a blank box cannot say it on its own: a level left blank is *pinned
+unsupported* for that model, so choosing it is refused by name instead of being silently dropped,
+while leaving **every** box blank keeps whatever the catalog declares. The consequences are worth
+stating precisely:
 
 | What you leave in the map | What it means |
 |---|---|

@@ -20,7 +20,7 @@ OpenAI 兼容 Provider 那些原本只能手改 YAML 的配置项，变成看得
 另一个字段名、厂商根本没实现的请求字段照发不误。本插件让你按路由、按模型把方言声明清楚，把思考
 档位阶梯和各档 token 预算配好，并在请求中途失败之前就看清到底会发出什么。
 
-> **状态：**`v0.4.4`，已在 DeepSeek Harness `0.1.7-alpha.1` 上验证。
+> **状态：**`v0.4.5`，已在 DeepSeek Harness `0.1.7-alpha.1` 上验证。
 
 ---
 
@@ -114,7 +114,7 @@ DeepSeek Harness 的 Provider schema 设计得相当完整，但「模型」页�
 
 ```bash
 # 从 GitHub Release 的 tgz 安装
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.4/dsh-advanced-provider-settings-0.4.4.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.5/dsh-advanced-provider-settings-0.4.5.tgz
 
 # 从 npm 安装
 dsh plugin --profile web add dsh-advanced-provider-settings
@@ -235,8 +235,10 @@ Harness 里的推理配置永远是两层，分别回答两个不同的问题：
 
 ### 按模型的映射
 
-**按模型配置 → 模型档位映射** 每一档一个输入框，框里的字符串就是这一档发出去的值。留空的档位表示
-**该模型不支持这一档**，于是选中它会被点名拒绝，而不是被悄悄丢掉。具体含义值得写清楚：
+**按模型配置 → 模型档位映射** 每一档一个输入框，框里的字符串就是这一档发出去的值。每个框后面写着这一
+档当前的状态（*发送 `low`*、*不支持*、*继承*、*不发送参数*）——因为空框自己说不清：留空的档位表示
+**该模型不支持这一档**，选中它会被点名拒绝，而不是被悄悄丢掉；而**全部**留空则是沿用模型目录的声明。
+具体含义值得写清楚：
 
 | 映射里留什么 | 含义 |
 |---|---|

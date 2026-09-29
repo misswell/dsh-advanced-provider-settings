@@ -492,6 +492,41 @@ function ModelInputChoice(props: {
   )
 }
 
+/**
+ * The state of one level, said out loud beside its box.
+ *
+ * A blank input cannot carry this: a placeholder that states a conclusion reads
+ * as a disabled field, not as a decision — which is how "Not supported" was
+ * being read, on every level, even before the user had declared anything. The
+ * three blank cases are genuinely different, so they get different words:
+ * `inherited` (no map at all, so the catalog decides), `unsupported` (this map
+ * declares other levels, and DSH pins an undeclared one to null), and `silent`
+ * (`off` mapped to null, the one level allowed to send nothing).
+ */
+function LevelState(props: {
+  t: Translate
+  /** Whether the model declares a level map at all, as opposed to inheriting. */
+  declared: boolean
+  wire: string | null | undefined
+}): ReactNode {
+  const { t, declared, wire } = props
+  if (typeof wire === 'string') {
+    return (
+      <span className={cls.levelState} data-state="sends">
+        {t('reasoning.wireSend')} <code>{wire}</code>
+      </span>
+    )
+  }
+  if (wire === null) {
+    return <span className={cls.levelState} data-state="silent">{t('reasoning.offSendsNothing')}</span>
+  }
+  return (
+    <span className={cls.levelState} data-state={declared ? 'unsupported' : 'inherited'}>
+      {declared ? t('reasoning.unsupported') : t('common.inherit')}
+    </span>
+  )
+}
+
 /** The level → wire-value grid, shared by both channels. */
 function ModelEffortsGrid(props: {
   t: Translate
@@ -540,15 +575,17 @@ function ModelEffortsGrid(props: {
               const wire = (mapping as Record<string, string | null>)[level]
               return (
                 <Field key={level} label={t(`level.${level}.label`)}>
-                  <Input
-                    className={`${cls.mono} ${cls.input}`}
-                    value={wire === null || wire === undefined ? '' : wire}
-                    placeholder={wire === null ? t('reasoning.offSendsNothing') : t('reasoning.unsupported')}
-                    aria-label={`${level} ${t('reasoning.wireValue')}`}
-                    disabled={disabled}
-                    spellCheck={false}
-                    onChange={(event) => { setEffort(level, event.currentTarget.value) }}
-                  />
+                  <div className={cls.fieldRow}>
+                    <Input
+                      className={`${cls.mono} ${cls.input}`}
+                      value={wire === null || wire === undefined ? '' : wire}
+                      aria-label={`${level} ${t('reasoning.wireValue')}`}
+                      disabled={disabled}
+                      spellCheck={false}
+                      onChange={(event) => { setEffort(level, event.currentTarget.value) }}
+                    />
+                    <LevelState t={t} declared={efforts !== undefined} wire={wire} />
+                  </div>
                   {level === 'off' ? (
                     <Switch
                       checked={wire === null}

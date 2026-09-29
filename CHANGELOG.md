@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] — 2026-09-29
+
+### Fixed
+
+**The level grid no longer says "Not supported" on levels nobody has decided about.** Every
+thinking-level box used a placeholder that stated the conclusion, so opening a model that had never
+been configured showed `Not supported` on all seven levels: the panel claimed the model does not
+support levels the user had never spoken about, in the least emphatic channel the surface has — a
+placeholder reads as a disabled field, not as a decision.
+
+- **Each level reports its state beside its box**: *sends `low`*, *Not supported*, *Inherit*, or
+  *sends nothing*. The three blank cases are genuinely different — no map at all (the catalog decides),
+  a declared map with an undeclared level (DSH pins it to `null`), and `off: null` (offered, sends
+  nothing) — and they now have three different words.
+- **The row note stops overreaching**: "a blank level is unsupported by that model; leave every level
+  blank to keep what the catalog declares".
+- **The boxes keep no semantic placeholder.** A level's state is data, not input-masking copy; the
+  inputs now carry only the accessible name (`<level> Wire value`).
+
+Three render tests cover the three blank states, and a fourth asserts that no level input carries a
+semantic placeholder again.
+
 ## [0.4.4] — 2026-09-29
 
 ### Added
@@ -494,6 +516,7 @@ active, and offers to import its global header mapping without overwriting heade
 - Not supported on DeepSeek Harness `0.1.4` or earlier: the extension seat and the client-side
   settings mutation API this plugin depends on do not exist there.
 
+[0.4.5]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.5
 [0.4.4]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.4
 [0.4.3]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.3
 [0.4.2]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.2

@@ -702,6 +702,40 @@ describe('provider sections', () => {
     expect(mapped).not.toContain('aps-note">reasoning.effortsDisabled')
   })
 
+  it('names a blank level beside its box, and calls an undeclared map inherited', () => {
+    // The blank case used to be a placeholder that stated the conclusion — on
+    // every level, even before the user had declared anything — so a model that
+    // was merely inheriting the catalog's declaration read as "this model does
+    // not support these levels". The blank states are named out loud now.
+    const inherited = render(modelsSection({ ...profile, models: [{ id: 'plain' }] }))
+    expect(inherited).toContain('data-state="inherited"')
+    expect(inherited).not.toContain('data-state="unsupported"')
+    expect(inherited).not.toContain('reasoning.unsupported')
+  })
+
+  it('distinguishes a declared value, an unsupported level and a silent off', () => {
+    const html = render(
+      modelsSection({ ...profile, models: [{ id: 'plain', reasoningEfforts: { off: null, high: 'high' } }] }),
+    )
+    // A declared level reports what it sends, with the value shown as data.
+    expect(html).toContain('data-state="sends"')
+    expect(html).toContain('reasoning.wireSend')
+    expect(html).toContain('<code>high</code>')
+    // Blank levels of a declared map are unsupported; `off: null` is neither.
+    expect(html).toContain('data-state="unsupported"')
+    expect(html).toContain('data-state="silent"')
+    expect(html).toContain('reasoning.offSendsNothing')
+  })
+
+  it('leaves no semantic placeholder on a level input', () => {
+    // Regression: the conclusion belongs in the state word, not in the field.
+    for (const model of [{ id: 'plain' }, { id: 'plain', reasoningEfforts: { low: 'low' } }]) {
+      const html = render(modelsSection({ ...profile, models: [model] }))
+      expect(html).not.toContain('placeholder="reasoning.unsupported"')
+      expect(html).not.toContain('placeholder="reasoning.offSendsNothing"')
+    }
+  })
+
   it('asks the host for the catalog instead of claiming there is nothing to configure', () => {
     // A catalog route's per-model channel is keyed by model id, so the editor
     // cannot exist until the host says which ids the route serves.

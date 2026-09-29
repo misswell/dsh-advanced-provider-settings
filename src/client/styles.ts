@@ -93,6 +93,13 @@ const CSS = `
 /* The档位 grid wraps to two rows at a normal width. With only a column gap the
    second row's label sat on top of the first row's input. */
 .aps-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));column-gap:16px;row-gap:10px;width:100%}
+/* One level's state, said next to its box. The box cannot carry it: a blank
+   input whose placeholder states a conclusion ("Not supported") reads as a
+   disabled field rather than as a decision the user has made. */
+.aps-level-state{flex:none;font-size:${SIZE(11)};line-height:1.4;color:var(--dsw-alias-label-tertiary,inherit);white-space:nowrap;max-width:18ch;overflow:hidden;text-overflow:ellipsis}
+.aps-level-state[data-state='unsupported']{color:var(--dsw-alias-label-secondary,inherit)}
+.aps-level-state[data-state='inherited']{font-style:italic}
+.aps-level-state code{font-family:ui-monospace,Consolas,monospace;color:var(--dsw-alias-label-secondary,inherit)}
 .aps-filter{max-width:220px}
 
 /* --------------------------------------------------- a number with its unit */
@@ -247,6 +254,7 @@ export const cls = {
   input: 'aps-input',
   inputNarrow: 'aps-input-narrow',
   grid: 'aps-grid',
+  levelState: 'aps-level-state',
   num: 'aps-num',
   numInput: 'aps-num-input',
   numUnit: 'aps-num-unit',

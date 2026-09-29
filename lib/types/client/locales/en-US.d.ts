@@ -141,8 +141,9 @@ export declare const en: {
     readonly 'reasoning.budget.medium': "Medium";
     readonly 'reasoning.budget.high': "High";
     readonly 'reasoning.levelsTitle': "Model level mapping";
-    readonly 'reasoning.levelsDesc': "Override the wire value one thinking level sends for this model. A level left unset is unsupported by that model; \"off\" can be offered without sending anything.";
+    readonly 'reasoning.levelsDesc': "Override the wire value one thinking level sends for this model. A blank level is unsupported by that model; leave every level blank to keep what the catalog declares. \"off\" can be offered without sending anything.";
     readonly 'reasoning.wireValue': "Wire value";
+    readonly 'reasoning.wireSend': "sends";
     readonly 'reasoning.unsupported': "Not supported";
     readonly 'reasoning.offNullable': "Offered, sends nothing";
     readonly 'reasoning.offSendsNothing': "sends nothing";

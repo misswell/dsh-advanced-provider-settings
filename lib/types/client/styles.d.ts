@@ -70,6 +70,7 @@ export declare const cls: {
     readonly input: "aps-input";
     readonly inputNarrow: "aps-input-narrow";
     readonly grid: "aps-grid";
+    readonly levelState: "aps-level-state";
     readonly num: "aps-num";
     readonly numInput: "aps-num-input";
     readonly numUnit: "aps-num-unit";
