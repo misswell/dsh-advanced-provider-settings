@@ -25,7 +25,7 @@ not implement is sent anyway. This plugin lets you declare the dialect per route
 the thinking ladder and its token budgets, and see what will leave the machine before a request fails
 halfway through a session.
 
-> **Status:** `v0.4.2`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
+> **Status:** `v0.4.3`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
 
 ---
 
@@ -35,6 +35,8 @@ halfway through a session.
 - [At a glance](#at-a-glance)
 - [What you can configure](#what-you-can-configure)
 - [Install](#install)
+  - [Web UI — the `web` profile](#web-ui--the-web-profile)
+  - [Desktop app — the `desktop` profile](#desktop-app--the-desktop-profile)
 - [Uninstall](#uninstall)
 - [Using it](#using-it)
 - [Thinking levels, in depth](#thinking-levels-in-depth)
@@ -116,12 +118,19 @@ model entry that sets it is rejected by name.
 
 Requires DeepSeek Harness `0.1.7` or a compatible build, and Node.js 20+.
 
+Both profiles run the same artifact — one package, no build on your machine. What differs is who is
+allowed to write to the profile.
+
+### Web UI — the `web` profile
+
+`dsh plugin` manages this profile, and all three sources work:
+
 ```bash
 # Straight from the repository — no build step, no npm publish
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 
 # From a GitHub release tarball (a fixed, content-hashed artifact)
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.2/dsh-advanced-provider-settings-0.4.2.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.3/dsh-advanced-provider-settings-0.4.3.tgz
 
 # From npm, once published
 dsh plugin --profile web add dsh-advanced-provider-settings
@@ -137,11 +146,33 @@ Then restart the web UI:
 dsh web
 ```
 
+### Desktop app — the `desktop` profile
+
+The app owns this profile, and the CLI refuses to touch it:
+
+```console
+$ dsh plugin --profile desktop add github:misswell/dsh-advanced-provider-settings
+error: profile "desktop" is managed exclusively by the Electron application
+```
+
+Install it from inside the app instead: open **Plugin Marketplace** and install
+`misswell/dsh-advanced-provider-settings`, then restart the app. The app writes exactly what the CLI
+writes for a web profile — a dependency in `~/.dsh/profiles/desktop/package.json` **and** an entry in
+that manifest's `dsh.profile.bundles` list, the entry that makes the plugin a profile layer rather
+than a plain dependency. (If the app has no Plugin Marketplace page yet, install
+`dsh-plugin-marketplace` first; the marketplace is itself a plugin.)
+
+> If an install ends with `spawn pnpm ENOENT`, the app was launched with a minimal PATH — what a
+> Finder- or Dock-launched macOS app inherits. Make a pnpm that matches the profile's store visible
+> to GUI apps (`launchctl setenv PATH …`, then relaunch) and install again.
+
 ## Uninstall
 
 ```bash
 dsh plugin --profile web remove dsh-advanced-provider-settings
 ```
+
+In the desktop app, remove it on the same Plugin Marketplace page.
 
 Removing the package removes the UI, and with it this plugin's own settings namespace: on 0.1.7 a
 namespace *is* a profile entry's `Config`, so dropping the entry drops the global header list and the

@@ -5,6 +5,29 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] — 2026-09-29
+
+### Changed
+
+**Install is now documented per profile, because the two do not install the same way.** The README gave
+one route — the CLI — with a hardcoded `--profile web`, which is the only profile that route can
+address. Anyone on the desktop app followed it into a wall: the CLI refuses that profile outright.
+
+- **The `web` profile keeps the three CLI sources** (git, release tarball, npm), unchanged.
+- **The `desktop` profile is documented as app-owned.** `dsh plugin --profile desktop …` fails with
+  `error: profile "desktop" is managed exclusively by the Electron application`, so the plugin is
+  installed from the app's Plugin Marketplace, which writes exactly what the CLI writes for a web
+  profile: a dependency in the profile manifest **and** an entry in that manifest's
+  `dsh.profile.bundles` list — the entry that makes the plugin a profile layer rather than a plain
+  dependency. Both profiles then run the same artifact.
+- **The failure mode we actually hit is written down.** A marketplace install that ends in
+  `spawn pnpm ENOENT` is the app's minimal PATH (what a Finder- or Dock-launched macOS app inherits),
+  not a plugin problem, and the note says how to fix it and relaunch.
+- **Uninstall points at the same split**: `dsh plugin --profile web remove` for the web profile, the
+  marketplace page for the desktop app.
+
+No code changed: `lib/` differs from 0.4.2 in the version string only.
+
 ## [0.4.2] — 2026-09-29
 
 ### Changed
@@ -450,6 +473,7 @@ active, and offers to import its global header mapping without overwriting heade
 - Not supported on DeepSeek Harness `0.1.4` or earlier: the extension seat and the client-side
   settings mutation API this plugin depends on do not exist there.
 
+[0.4.3]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.3
 [0.4.2]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.2
 [0.4.1]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.1
 [0.4.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.0

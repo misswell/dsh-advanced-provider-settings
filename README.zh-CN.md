@@ -20,7 +20,7 @@ OpenAI 兼容 Provider 那些原本只能手改 YAML 的配置项，变成看得
 另一个字段名、厂商根本没实现的请求字段照发不误。本插件让你按路由、按模型把方言声明清楚，把思考
 档位阶梯和各档 token 预算配好，并在请求中途失败之前就看清到底会发出什么。
 
-> **状态：**`v0.4.2`，已在 DeepSeek Harness `0.1.7-alpha.1` 上验证。
+> **状态：**`v0.4.3`，已在 DeepSeek Harness `0.1.7-alpha.1` 上验证。
 
 ---
 
@@ -30,6 +30,8 @@ OpenAI 兼容 Provider 那些原本只能手改 YAML 的配置项，变成看得
 - [一览](#一览)
 - [可以配置什么](#可以配置什么)
 - [安装](#安装)
+  - [Web UI —— `web` profile](#web-ui--web-profile)
+  - [桌面版 —— `desktop` profile](#桌面版--desktop-profile)
 - [卸载](#卸载)
 - [使用方式](#使用方式)
 - [深入：思考等级](#深入思考等级)
@@ -104,9 +106,15 @@ DeepSeek Harness 的 Provider schema 设计得相当完整，但「模型」页�
 
 需要 DeepSeek Harness `0.1.7` 或兼容版本，以及 Node.js 20+。
 
+两个 profile 跑的是同一个产物——同一个包，机器上无需构建。区别只在于**谁有权写入 profile**。
+
+### Web UI —— `web` profile
+
+这个 profile 由 `dsh plugin` 管理，三种来源都可以：
+
 ```bash
 # 从 GitHub Release 的 tgz 安装
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.2/dsh-advanced-provider-settings-0.4.2.tgz
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.3/dsh-advanced-provider-settings-0.4.3.tgz
 
 # 发布到 npm 后
 dsh plugin --profile web add dsh-advanced-provider-settings
@@ -115,17 +123,40 @@ dsh plugin --profile web add dsh-advanced-provider-settings
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 ```
 
+三种方式都不需要在你机器上构建。`lib/` 是**故意提交进仓库**的：`dsh plugin` 不跑构建步骤，
+而 pnpm 10+ 会拦住 git 依赖的 `prepare` 脚本，所以需要构建的插件必须自带产物。
+
 然后重启 Web UI：
 
 ```bash
 dsh web
 ```
 
+### 桌面版 —— `desktop` profile
+
+这个 profile 归桌面应用管，CLI 会直接拒绝：
+
+```console
+$ dsh plugin --profile desktop add github:misswell/dsh-advanced-provider-settings
+error: profile "desktop" is managed exclusively by the Electron application
+```
+
+所以要在**应用内**安装：打开**插件市场**，装 `misswell/dsh-advanced-provider-settings`，然后重启应用。
+应用写入的东西，和 CLI 为一个 web profile 写入的完全一样——`~/.dsh/profiles/desktop/package.json`
+里的一条依赖，**以及**该清单 `dsh.profile.bundles` 里的一条条目；正是后者让插件成为 profile 的一层，
+而不是普通依赖。（若应用里还没有「插件市场」页面，先装 `dsh-plugin-marketplace`——市场本身也是个插件。）
+
+> 如果安装以 `spawn pnpm ENOENT` 结束，说明应用启动时继承的是最小 PATH（macOS 上从访达或程序坞
+> 启动的应用就是如此）。让 GUI 应用能看到与 profile store 匹配的 pnpm（`launchctl setenv PATH …`，
+> 然后重启应用），再装一次。
+
 ## 卸载
 
 ```bash
 dsh plugin --profile web remove dsh-advanced-provider-settings
 ```
+
+桌面版则在同一个「插件市场」页面里卸载。
 
 移除包会一并移除界面，以及插件自己的设置命名空间：在 0.1.7 上，命名空间**就是** profile 条目自己的
 `Config`，条目没了，挂在它下面的全局 Header 列表和界面偏好也就没了。**你的 Provider 配置不受影响**
