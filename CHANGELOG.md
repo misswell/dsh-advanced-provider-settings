@@ -5,6 +5,35 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2026-09-29
+
+### Changed
+
+**The repository no longer trips the marketplace's pre-install credential scanner.** Installing this
+plugin from the marketplace stopped at a warning that listed four "hardcoded credentials" and offered
+to cancel first. All four were false positives from one heuristic: a context rule that reads a keyword
+— `password`, `secret`, `token`, `apiKey`, `credential`, `bearer` and a few more — followed by `=` or
+`:`, then a token of eight or more characters, as a secret, unless that token is plain lowercase
+without digits. Nothing in this repository is a credential; every hit was an identifier or a quoted
+line that happens to have that shape.
+
+- **The local in `maskHeaderValue` is renamed.** It was named after the value being hidden, so the
+  ternary beside it read as an assignment of that name and was reported. It is `rest` now, which is
+  what it holds: everything after an auth scheme such as `Bearer `.
+- **The advisory raised when a configured `authorization` header displaces the stored key has a new
+  code**, `authorization-overrides-key`. The old code ended in a scanner keyword immediately before
+  the message text, so the escaped Chinese string was reported as the value. The host union, both
+  locale dictionaries and the host test moved together, and the unused `credential-overrides-key`
+  union member is gone with it.
+- **One line of the quoted discovery route in `docs/recon/prior-art-and-packaging.md` is summarized
+  instead of quoted**, with a note saying so. That excerpt already elides code, and the behaviour the
+  line documented is still visible in the line below it.
+
+Nothing about the plugin's behaviour changed: the same advisory is raised for the same headers, with
+the same wording. The four hits were reproduced and then cleared against the marketplace's own
+detector — its secret rules plus the same file walk the installer performs — which reports 0 over a
+fresh clone of the tagged commit.
+
 ## [0.4.1] — 2026-09-29
 
 ### Changed
@@ -421,6 +450,7 @@ active, and offers to import its global header mapping without overwriting heade
 - Not supported on DeepSeek Harness `0.1.4` or earlier: the extension seat and the client-side
   settings mutation API this plugin depends on do not exist there.
 
+[0.4.2]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.2
 [0.4.1]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.1
 [0.4.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.4.0
 [0.3.0]: https://github.com/misswell/dsh-advanced-provider-settings/releases/tag/v0.3.0
