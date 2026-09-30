@@ -123,22 +123,20 @@ allowed to write to the profile.
 
 ### Web UI — the `web` profile
 
-`dsh plugin` manages this profile, and all three sources work:
+`dsh plugin` manages this profile, and both sources work:
 
 ```bash
 # Straight from the repository — no build step
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
 
 # From a GitHub release tarball (a fixed, content-hashed artifact)
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.5/dsh-advanced-provider-settings-0.4.5.tgz
-
-# From npm
-dsh plugin --profile web add dsh-advanced-provider-settings
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.0/dsh-advanced-provider-settings-0.4.0.tgz
 ```
 
-All three work without a build on your machine. `lib/` is committed on purpose: `dsh plugin` runs
+Both work without a build on your machine. `lib/` is committed on purpose: `dsh plugin` runs
 no build step, and pnpm 10+ blocks a git dependency's `prepare` script, so a plugin that needs
-building must ship its output.
+building must ship its output. The package is not published to npm, so a bare-name install is
+not offered.
 
 Then restart the web UI:
 

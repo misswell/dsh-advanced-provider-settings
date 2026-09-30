@@ -110,21 +110,19 @@ DeepSeek Harness 的 Provider schema 设计得相当完整，但「模型」页�
 
 ### Web UI —— `web` profile
 
-这个 profile 由 `dsh plugin` 管理，三种来源都可以：
+这个 profile 由 `dsh plugin` 管理，两种来源都可以：
 
 ```bash
-# 从 GitHub Release 的 tgz 安装
-dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.5/dsh-advanced-provider-settings-0.4.5.tgz
-
-# 从 npm 安装
-dsh plugin --profile web add dsh-advanced-provider-settings
-
 # 直接从仓库安装 —— 无需构建
 dsh plugin --profile web add github:misswell/dsh-advanced-provider-settings
+
+# 从 GitHub Release 的 tgz 安装
+dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-settings/releases/download/v0.4.0/dsh-advanced-provider-settings-0.4.0.tgz
 ```
 
-三种方式都不需要在你机器上构建。`lib/` 是**故意提交进仓库**的：`dsh plugin` 不跑构建步骤，
+两种方式都不需要在你机器上构建。`lib/` 是**故意提交进仓库**的：`dsh plugin` 不跑构建步骤，
 而 pnpm 10+ 会拦住 git 依赖的 `prepare` 脚本，所以需要构建的插件必须自带产物。
+（本包未发布到 npm，因此不提供裸包名安装。）
 
 然后重启 Web UI：
 
