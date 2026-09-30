@@ -25,7 +25,7 @@ not implement is sent anyway. This plugin lets you declare the dialect per route
 the thinking ladder and its token budgets, and see what will leave the machine before a request fails
 halfway through a session.
 
-> **Status:** `v0.4.5`. Verified against DeepSeek Harness `0.1.7-alpha.1`.
+> **Status:** `v0.4.6`. Verified against DeepSeek Harness `0.2.0-rc.2` (and unchanged by it).
 
 ---
 
@@ -116,7 +116,7 @@ model entry that sets it is rejected by name.
 
 ## Install
 
-Requires DeepSeek Harness `0.1.7` or a compatible build, and Node.js 20+.
+Requires DeepSeek Harness `0.1.7`–`0.2.0` or a compatible build, and Node.js 20+.
 
 Both profiles run the same artifact — one package, no build on your machine. What differs is who is
 allowed to write to the profile.
@@ -492,8 +492,8 @@ and, on the route itself:
 
 ## Behaviours that surprise people
 
-These are properties of DeepSeek Harness `0.1.7-alpha.1` that this plugin surfaces rather than hides.
-Each is reported in the UI at the point where it matters.
+These are properties of DeepSeek Harness `0.2.0-rc.2` (identical in `0.1.7-*`) that this plugin
+surfaces rather than hides. Each is reported in the UI at the point where it matters.
 
 ### 1. A provider-level `User-Agent` is discarded
 
@@ -551,15 +551,18 @@ exactly.
 
 | DeepSeek Harness | Status | Notes |
 |---|---|---|
-| `0.1.7-alpha.1` | **Verified** | Every constant and code path in this release was read from this build and exercised against it. |
-| other `0.1.7-*` | Expected to work | Release candidates inside one patch series have not changed the provider schema historically, but this is untested. |
+| `0.2.0-rc.2` | **Verified** | Every constant and code path in this release was re-read from this build and exercised against it. The provider profile, retry schema and client extension points are byte-identical to 0.1.7; the one behavioural change is that retry execution now lives in the optional `dsh-llm-retry` plugin, which the Diagnostics panel probes. |
+| other `0.2.0-*` | Expected to work | Release candidates inside one patch series have not changed the provider schema historically, but this is untested. |
+| `0.1.7-*` | Expected to work | Verified through v0.4.5; the schema this release checks against is identical in 0.1.7-rc.2. |
 | `0.1.6` and earlier | Unsupported | 0.1.7 rewrote the settings layer this plugin is built on: a namespace is now derived from a profile entry's own `Config`, and the browser writes through `configForms` and `remote.settings`. Neither exists before 0.1.7 — install `v0.2.1` there instead. |
-| `0.2.x` and later | Unknown | Check the Diagnostics panel: it reports the detected Harness version and which capabilities resolved. |
 
 The Diagnostics panel is the authoritative answer for a given install. It reports the detected
-Harness version, whether the plugin's namespace and the `llm-pi-ai` namespace are served, whether
-revision-fenced writes are supported, whether the header bridge installed, and whether the
-Models-page extension package resolved.
+Harness version — read from the running process's launch path first, so a profile whose hoisted
+`@deepseek-ai` links still name an older runtime cannot mislead it — and whether that build is the
+one the schema constants were verified against, whether the plugin's namespace and the `llm-pi-ai`
+namespace are served, whether revision-fenced writes are supported, whether the header bridge
+installed, whether the retry executor (`dsh-llm-retry`) is present, and whether the Models-page
+extension package resolved.
 
 ## How it stays safe
 

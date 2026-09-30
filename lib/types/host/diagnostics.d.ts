@@ -16,6 +16,29 @@ export interface DiagnosticsReport {
     reservedHeaders: readonly string[];
 }
 /**
+ * Read the running build's version out of the process command line.
+ *
+ * The module-resolution probes below answer "which @deepseek-ai copy does THIS
+ * module see" — and that can differ from the running build, because a profile
+ * is linked into a hoisted `node_modules` whose `@deepseek-ai` entries are
+ * symlinks to whichever runtime was current when it was installed (observed:
+ * 0.1.5-rc.2 links while 0.2.0-rc.2 runs). The harness process itself is
+ * launched from the runtime directory, so its command line names the true
+ * version.
+ *
+ * @returns the version segment, or undefined when no argv entry matches.
+ */
+/**
+ * Pull the version segment out of launch-path entries.
+ *
+ * Exported as a pure function so tests can feed argv shapes without touching
+ * the runner's own process state.
+ *
+ * @param entries - candidate path strings (execPath + argv), any values.
+ * @returns the version segment, or undefined when no entry matches.
+ */
+export declare function versionFromLaunchPath(entries: readonly unknown[]): string | undefined;
+/**
  * Best-effort read of the running DSH version.
  *
  * The value is advisory: it feeds a diagnostic line and the compatibility
@@ -36,6 +59,18 @@ export declare function isModelsExtensionInstalled(): boolean;
  * Resolved through a literal specifier for the same reason.
  */
 export declare function isLegacyPluginInstalled(): boolean;
+/**
+ * Whether the 0.2.0 retry executor is installed.
+ *
+ * Since DSH 0.2.0 the `retryPolicy` each provider route declares is EXECUTED by
+ * the optional `dsh-llm-retry` plugin on the agent loop's request-recovery
+ * extension point; the adapter only resolves the policy. Standard
+ * compositions (`dsh-sdk-minimal`) include it, but a minimal composition
+ * without it leaves every configured policy inert — which looks exactly like a
+ * plugin bug, so the diagnostics name the executor rather than stay silent.
+ * Resolved through a literal specifier, like every probe here.
+ */
+export declare function isRetryExecutorInstalled(): boolean;
 /** Inputs the host half can observe cheaply. */
 export interface DiagnosticsInput {
     pluginVersion: string;

@@ -243,6 +243,8 @@ export const zh: Record<LocaleKey, string> = {
   'diag.probe.modelsExtensionPackage': '模型扩展包',
   'diag.probe.legacyNamespace': '旧插件命名空间',
   'diag.probe.legacyPlugin': '旧插件包',
+  'diag.probe.retryExecutor': '重试执行器（dsh-llm-retry）',
+  'diag.probe.versionMatch': 'Schema 已验证匹配',
   'diag.state.ok': '正常',
   'diag.state.missing': '缺失',
   'diag.state.unknown': '未知',
@@ -254,6 +256,10 @@ export const zh: Record<LocaleKey, string> = {
   'diag.migrationIgnored': '已选择不导入。',
   'diag.legacyBothActive': 'dsh-custom-provider-settings 仍在运行。两个插件都会注入请求 Header，请卸载其中一个以避免重复。',
   'diag.probe.locale': '语言字典',
+
+  // Dead provider fields（Configuration Doctor）
+  'doctor.dead.dead-user-agent':
+    '这些字段已写入但被 DeepSeek Harness 忽略：{fields}。Harness 会剥掉路由级 user-agent 并发送自己的标识；自定义 User-Agent 请写到「全局 Header」中。',
 
   // Global settings page
   'global.navLabel': 'Provider 设置',

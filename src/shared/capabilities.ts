@@ -12,18 +12,29 @@
  *  - retry schema:           @deepseek-ai/dsh-llm      (`RetryPolicySchema`)
  *  - compat applicability:   @earendil-works/pi-ai/dist/types.d.ts
  *                            (`OpenAICompletionsCompat`, `OpenAIResponsesCompat`,
- *                             `AnthropicMessagesCompat`)
+ *                             `AnthropicMessagesCompat`) and the gates in
+ *                            dsh-llm-pi-ai/lib/types/catalog.d.ts, whose
+ *                            "offer"/"withhold" dispositions decide what a
+ *                            profile may actually set
  *  - reserved headers:       @deepseek-ai/dsh-llm      (`attributionHeaders`)
+ *
+ * Verified 2026-09-30 against the 0.2.0-rc.2 build: the routeable protocol set
+ * is still the three below (`mistral-conversations` exists only as a compat
+ * gate, not in `PROTOCOLS`), and every compat field pi-ai 0.2 added
+ * (`supportsMidConvo*`, `sessionAffinityFormat`, grammar-tool and prompt-cache
+ * fields) is `"withhold"` in the gates — so the offered set of 26 is unchanged.
+ * Retry execution moved into the optional `dsh-llm-retry` plugin in 0.2.0; the
+ * policy schema itself is unchanged (see diagnostics `retryExecutor`).
  *
  * `HARNESS_MATRIX` records the exact build this table was verified against; the
  * Diagnostics panel surfaces it so a bug report can name it.
  */
 
 /** The DSH build every constant in this file was verified against. */
-export const VERIFIED_DSH_VERSION = '0.1.7-alpha.1'
+export const VERIFIED_DSH_VERSION = '0.2.0-rc.2'
 
 /** This plugin's own version. Kept in step with package.json by the build check. */
-export const PLUGIN_VERSION = '0.4.5'
+export const PLUGIN_VERSION = '0.4.6'
 
 /** Namespace owning the OpenAI-compatible provider routes. */
 export const PROVIDER_NAMESPACE = 'llm-pi-ai'

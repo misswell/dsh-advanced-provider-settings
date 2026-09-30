@@ -51,6 +51,53 @@ const VERSION_PROBE_PACKAGES: readonly { specifier: string; manifest: () => unkn
 })()
 
 /**
+ * The runtime-directory layout the Desk app launches the harness from:
+ * `.../runtime/dsh/<version>/...`. An argv entry naming that directory is the
+ * most truthful version signal available, because it names the RUNNING build.
+ */
+const RUNTIME_PATH_VERSION = /[\\/]runtime[\\/]dsh[\\/]([^/\\()\s]+)[\\/]/
+
+/**
+ * Read the running build's version out of the process command line.
+ *
+ * The module-resolution probes below answer "which @deepseek-ai copy does THIS
+ * module see" — and that can differ from the running build, because a profile
+ * is linked into a hoisted `node_modules` whose `@deepseek-ai` entries are
+ * symlinks to whichever runtime was current when it was installed (observed:
+ * 0.1.5-rc.2 links while 0.2.0-rc.2 runs). The harness process itself is
+ * launched from the runtime directory, so its command line names the true
+ * version.
+ *
+ * @returns the version segment, or undefined when no argv entry matches.
+ */
+/**
+ * Pull the version segment out of launch-path entries.
+ *
+ * Exported as a pure function so tests can feed argv shapes without touching
+ * the runner's own process state.
+ *
+ * @param entries - candidate path strings (execPath + argv), any values.
+ * @returns the version segment, or undefined when no entry matches.
+ */
+export function versionFromLaunchPath(entries: readonly unknown[]): string | undefined {
+  for (const entry of entries) {
+    if (typeof entry !== 'string' || entry.length === 0) continue
+    const version = entry.match(RUNTIME_PATH_VERSION)?.[1]
+    if (version !== undefined) return version
+  }
+  return undefined
+}
+
+/** The process's own launch paths, most specific first. */
+function launchPathEntries(): unknown[] {
+  return [process.execPath, ...process.argv]
+}
+
+function versionFromArgv(): string | undefined {
+  return versionFromLaunchPath(launchPathEntries())
+}
+
+/**
  * Best-effort read of the running DSH version.
  *
  * The value is advisory: it feeds a diagnostic line and the compatibility
@@ -60,6 +107,8 @@ const VERSION_PROBE_PACKAGES: readonly { specifier: string; manifest: () => unkn
  * @returns the version string, or undefined when it cannot be read.
  */
 export function detectDshVersion(): string | undefined {
+  const fromArgv = versionFromArgv()
+  if (fromArgv !== undefined) return fromArgv
   try {
     for (const { manifest } of VERSION_PROBE_PACKAGES) {
       try {
@@ -103,6 +152,26 @@ export function isLegacyPluginInstalled(): boolean {
   }
 }
 
+/**
+ * Whether the 0.2.0 retry executor is installed.
+ *
+ * Since DSH 0.2.0 the `retryPolicy` each provider route declares is EXECUTED by
+ * the optional `dsh-llm-retry` plugin on the agent loop's request-recovery
+ * extension point; the adapter only resolves the policy. Standard
+ * compositions (`dsh-sdk-minimal`) include it, but a minimal composition
+ * without it leaves every configured policy inert — which looks exactly like a
+ * plugin bug, so the diagnostics name the executor rather than stay silent.
+ * Resolved through a literal specifier, like every probe here.
+ */
+export function isRetryExecutorInstalled(): boolean {
+  try {
+    createRequire(import.meta.url)('@deepseek-ai/dsh-llm-retry/package.json')
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Inputs the host half can observe cheaply. */
 export interface DiagnosticsInput {
   pluginVersion: string
@@ -127,11 +196,22 @@ export interface DiagnosticsInput {
  */
 export function buildDiagnostics(input: DiagnosticsInput): DiagnosticsReport {
   const detected = detectDshVersion()
+  const versionVerified = detected !== undefined && detected === VERIFIED_DSH_VERSION
   const probes: DiagnosticProbe[] = [
     {
       key: 'dshVersion',
       state: detected === undefined ? 'unknown' : 'ok',
       detail: detected ?? 'unresolved',
+    },
+    {
+      key: 'versionMatch',
+      // `ok` means the constants in capabilities.ts were verified against
+      // exactly this build. Anything else is a drift signal for bug reports,
+      // not an error: an unverified combination may still work.
+      state: versionVerified ? 'ok' : 'unknown',
+      ...(detected === undefined || versionVerified
+        ? {}
+        : { detail: `${detected} vs ${VERIFIED_DSH_VERSION}` }),
     },
     {
       key: 'settingsNamespace',
@@ -150,6 +230,11 @@ export function buildDiagnostics(input: DiagnosticsInput): DiagnosticsReport {
     { key: 'settingsWritable', state: input.writable ? 'ok' : 'missing' },
     { key: 'headerRuntime', state: input.headerRuntimeActive ? 'ok' : 'missing', detail: String(input.headerRuntimeApplied) },
     { key: 'settingsRoutes', state: input.routesRegistered ? 'ok' : 'missing' },
+    {
+      key: 'retryExecutor',
+      state: isRetryExecutorInstalled() ? 'ok' : 'missing',
+      detail: '@deepseek-ai/dsh-llm-retry',
+    },
     {
       key: 'modelsExtensionPackage',
       state: isModelsExtensionInstalled() ? 'ok' : 'missing',

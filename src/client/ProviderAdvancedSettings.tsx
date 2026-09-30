@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { PROVIDER_NAMESPACE } from '../shared/capabilities.js'
+import { findDeadFields } from '../shared/dead-fields.js'
 import {
   toRetryEditorState,
   fromRetryEditorState,
@@ -188,6 +189,21 @@ function Panel(props: {
   }, [ownScope])
 
   const summaries = useMemo(() => summarizeSections(profile), [profile])
+  // Keys the profile carries that DSH reads and ignores (e.g. a hand-edited
+  // `userAgent`). The schema passes them through, so silence would read as
+  // success; the warning says they do nothing instead of refusing the save.
+  const deadFields = useMemo(() => findDeadFields(profile), [profile])
+  // One notice per reason: each dead key has its own explanation, and a save
+  // that fixes one should not keep showing copy about another.
+  const deadGroups = useMemo(() => {
+    const byCode = new Map<string, string[]>()
+    for (const dead of deadFields) {
+      const fields = byCode.get(dead.code) ?? []
+      fields.push(dead.field)
+      byCode.set(dead.code, fields)
+    }
+    return [...byCode.entries()].map(([code, fields]) => ({ code, fields: fields.join(', ') }))
+  }, [deadFields])
   const summaryById = useMemo(
     () => new Map(summaries.map((summary) => [summary.id, summary])),
     [summaries],
@@ -308,6 +324,9 @@ function Panel(props: {
           <div className={cls.shellBody}>
             {draft.writable ? null : <Notice tone="warning">{t('common.readOnly')}</Notice>}
             {draft.status === 'unavailable' ? <Notice tone="danger">{t('common.unavailable')}</Notice> : null}
+            {deadGroups.map(({ code, fields }) => (
+              <Notice key={code} tone="warning">{t(`doctor.dead.${code}`, { fields })}</Notice>
+            ))}
 
             <SectionShell
               id="aps-models"

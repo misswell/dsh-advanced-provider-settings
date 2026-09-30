@@ -5,6 +5,38 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] — 2026-09-30
+
+### Added
+
+**Verified against DeepSeek Harness `0.2.0-rc.2`, and the diagnostics now say what that means.**
+Every schema constant was re-read from the 0.2.0-rc.2 build: the provider profile, the retry schema
+and defaults, the 26 offered compat fields, the three routeable protocols, the thinking ladder and
+the reserved-header list are all identical to 0.1.7 — the release needed no schema change. What 0.2.0
+did change is now visible instead of assumed:
+
+- **A retry-executor probe.** Since 0.2.0 the `retryPolicy` a provider route declares is *executed*
+  by the optional `dsh-llm-retry` plugin on the agent loop's request-recovery extension point; the
+  adapter only resolves the policy. Standard compositions include it, but a minimal one without it
+  leaves every configured policy inert — which reads exactly like a plugin bug. The Diagnostics
+  panel now reports whether the executor resolved (`retryExecutor`), so the page names the missing
+  piece instead of leaving retry looking broken.
+- **A verified-build match probe** (`versionMatch`). `ok` only when the detected Harness version is
+  the one the constants were verified against; a mismatch is reported with both versions so a bug
+  report can name the combination.
+- **Version detection reads the running build first.** A profile is linked into a hoisted
+  `node_modules` whose `@deepseek-ai` entries are symlinks to whichever runtime was current when it
+  was installed — observed here as 0.1.5-rc.2 links while 0.2.0-rc.2 runs, which made the old
+  module-resolution probe report a version that was not running. The harness process is launched
+  from the runtime directory, so its command line names the truth; the module probes remain as the
+  fallback.
+- **Dead provider fields are called out** (the Configuration Doctor case). Keys the schema passes
+  through and DSH ignores — today the one certain case is `userAgent`, which has never been read
+  and would be stripped as a header anyway — now show a warning at the top of the provider panel,
+  with the working channel named (Global headers). The warning never blocks a save: DSH itself
+  accepts the profile.
+- **Validation learned severities.** A draft issue can be a warning; only errors refuse the write.
+
 ## [0.4.5] — 2026-09-29
 
 ### Fixed

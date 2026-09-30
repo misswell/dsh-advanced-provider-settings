@@ -5,6 +5,11 @@ export interface DraftIssue {
     field: string;
     /** Stable code the client resolves through its locale files. */
     code: string;
+    /**
+     * `error` refuses the write; `warning` reports a likely mistake the schema
+     * still accepts (a dead field DSH ignores). Absent means `error`.
+     */
+    severity?: 'error' | 'warning';
     /** Offending value rendered small and safe for diagnostics (never a secret). */
     detail?: string;
 }

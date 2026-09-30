@@ -13,6 +13,7 @@
  * as a field-level message instead of an opaque write rejection.
  */
 import { COMPAT_FIELD_BY_KEY, isProtocolId, THINKING_LEVELS } from '../shared/capabilities.js'
+import { findDeadFields } from '../shared/dead-fields.js'
 import { validateHeaderRecord } from '../shared/headers.js'
 import { validateRetryPolicy } from '../shared/retry.js'
 import type { ProviderProfile } from '../shared/types.js'
@@ -24,6 +25,11 @@ export interface DraftIssue {
   field: string
   /** Stable code the client resolves through its locale files. */
   code: string
+  /**
+   * `error` refuses the write; `warning` reports a likely mistake the schema
+   * still accepts (a dead field DSH ignores). Absent means `error`.
+   */
+  severity?: 'error' | 'warning'
   /** Offending value rendered small and safe for diagnostics (never a secret). */
   detail?: string
 }
@@ -43,6 +49,12 @@ const POSITIVE_INTEGER_FIELDS = ['timeoutMs', 'websocketConnectTimeoutMs'] as co
  */
 export function validateProviderDraft(profile: ProviderProfile): DraftIssue[] {
   const issues: DraftIssue[] = []
+
+  // Dead keys pass the schema and do nothing: the user believes they work.
+  // A warning, never a refusal — DSH itself accepts the profile.
+  for (const dead of findDeadFields(profile)) {
+    issues.push({ field: dead.field, code: dead.code, severity: 'warning' })
+  }
 
   if (profile.api !== undefined && !isProtocolId(profile.api)) {
     issues.push({ field: 'api', code: 'protocol-unknown', detail: String(profile.api) })
@@ -194,5 +206,5 @@ function validateCompatIssues(
 
 /** Whether any issue is severe enough to refuse the write. */
 export function hasBlockingIssue(issues: readonly DraftIssue[]): boolean {
-  return issues.length > 0
+  return issues.some((issue) => issue.severity !== 'warning')
 }

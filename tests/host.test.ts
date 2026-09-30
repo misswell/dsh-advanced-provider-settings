@@ -36,8 +36,9 @@ import {
   type SettingsDescriptorLike,
 } from '../src/host/settings.js'
 import { resolveEffectiveHeaders, headerAdvisories, overridesAttribution } from '../src/host/header-resolver.js'
-import { validateProviderDraft } from '../src/host/validation.js'
-import { buildDiagnostics } from '../src/host/diagnostics.js'
+import { validateProviderDraft, hasBlockingIssue } from '../src/host/validation.js'
+import { buildDiagnostics, versionFromLaunchPath } from '../src/host/diagnostics.js'
+import { findDeadFields } from '../src/shared/dead-fields.js'
 import { LEGACY_NAMESPACE, PLUGIN_SETTINGS_NS, PROVIDER_NAMESPACE } from '../src/shared/capabilities.js'
 import type { PluginSettings, ProviderProfile } from '../src/shared/types.js'
 
@@ -547,6 +548,25 @@ describe('validate op', () => {
       }),
     ).toEqual([])
   })
+
+  it('warns about a dead userAgent key without refusing the save', () => {
+    const issues = validateProviderDraft({ api: 'openai-completions', userAgent: 'my-agent/1.0' })
+    expect(issues).toContainEqual({ field: 'userAgent', code: 'dead-user-agent', severity: 'warning' })
+    // A dead field passes the schema, so the write must stay open.
+    expect(hasBlockingIssue(issues)).toBe(false)
+    // The same draft with a real error still blocks.
+    expect(
+      hasBlockingIssue([...issues, { field: 'reasoning', code: 'thinking-level-unknown' }]),
+    ).toBe(true)
+  })
+
+  it('finds only the dead keys the profile actually carries', () => {
+    expect(findDeadFields({})).toEqual([])
+    expect(findDeadFields({ headers: { 'x-a': '1' } })).toEqual([])
+    expect(findDeadFields({ userAgent: 'x/1' })).toEqual([{ field: 'userAgent', code: 'dead-user-agent' }])
+    // A hand-written `userAgent:` with no value is just as dead.
+    expect(findDeadFields({ userAgent: null })).toEqual([{ field: 'userAgent', code: 'dead-user-agent' }])
+  })
 })
 
 describe('legacy op and migration', () => {
@@ -594,12 +614,49 @@ describe('diagnostics', () => {
     })
     // A pinned literal, not the constant: bumping the verified build must be a
     // deliberate edit here rather than something that drifts along with it.
-    expect(report.verifiedDshVersion).toBe('0.1.7-alpha.1')
+    expect(report.verifiedDshVersion).toBe('0.2.0-rc.2')
     expect(report.reservedHeaders).toEqual(['user-agent'])
     const byKey = new Map(report.probes.map((probe) => [probe.key, probe]))
     expect(byKey.get('settingsNamespace')?.state).toBe('ok')
     expect(byKey.get('providerNamespace')?.state).toBe('ok')
     expect(byKey.get('headerRuntime')?.detail).toBe('3')
+  })
+
+  it('reports the 0.2.0 retry executor and whether the verified build matches', () => {
+    const report = buildDiagnostics({
+      pluginVersion: '0.1.0',
+      namespaces: [PLUGIN_SETTINGS_NS, PROVIDER_NAMESPACE],
+      writable: true,
+      revisionSupported: true,
+      headerRuntimeActive: true,
+      headerRuntimeApplied: 0,
+      routesRegistered: true,
+    })
+    const byKey = new Map(report.probes.map((probe) => [probe.key, probe]))
+    // The executor is a peer only a real DSH runtime provides; this repo does
+    // not vendor the 0.2.0 service stack, so both states are legitimate here.
+    // What must hold is that the probe exists and names the package, so a
+    // runtime without it reads "missing" instead of retry feeling broken.
+    const executor = byKey.get('retryExecutor')!
+    expect(['ok', 'missing']).toContain(executor.state)
+    expect(executor.detail).toBe('@deepseek-ai/dsh-llm-retry')
+
+    // versionMatch speaks of the constants' provenance, not of health: "ok"
+    // only when the running build IS the verified one, "unknown" otherwise —
+    // and a mismatch carries the pair, so a bug report can name both builds.
+    const match = byKey.get('versionMatch')!
+    const detected = report.detectedDshVersion
+    if (detected === report.verifiedDshVersion) {
+      expect(match.state).toBe('ok')
+      expect(match.detail).toBeUndefined()
+    } else if (detected === undefined) {
+      // Nothing to compare against; "unknown" without a fabricated pair.
+      expect(match.state).toBe('unknown')
+      expect(match.detail).toBeUndefined()
+    } else {
+      expect(match.state).toBe('unknown')
+      expect(match.detail).toBe(`${detected} vs ${report.verifiedDshVersion}`)
+    }
   })
 
   it('degrades to "missing" rather than failing when a service is absent', () => {
@@ -614,6 +671,21 @@ describe('diagnostics', () => {
     })
     for (const probe of report.probes) expect(['ok', 'missing', 'unknown']).toContain(probe.state)
     expect(report.probes.find((probe) => probe.key === 'settingsNamespace')?.state).toBe('missing')
+  })
+
+  it('reads the running build from the launch path before any module copy', () => {
+    // The Desk app launches the harness from the runtime directory; a profile's
+    // hoisted links can still name an older runtime, so the command line wins.
+    expect(
+      versionFromLaunchPath([
+        '/usr/local/bin/node',
+        '/Applications/DeepSeek Harness Desk.app/Contents/Resources/runtime/dsh/0.2.0-rc.2/lib/cli.js',
+        '--profile',
+        'web',
+      ]),
+    ).toBe('0.2.0-rc.2')
+    expect(versionFromLaunchPath(['dsh', '--profile', 'web'])).toBeUndefined()
+    expect(versionFromLaunchPath([42, null, undefined])).toBeUndefined()
   })
 })
 

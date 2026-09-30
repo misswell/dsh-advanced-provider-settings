@@ -211,6 +211,8 @@ export declare const en: {
     readonly 'diag.probe.modelsExtensionPackage': "Models extension package";
     readonly 'diag.probe.legacyNamespace': "Legacy plugin namespace";
     readonly 'diag.probe.legacyPlugin': "Legacy plugin package";
+    readonly 'diag.probe.retryExecutor': "Retry executor (dsh-llm-retry)";
+    readonly 'diag.probe.versionMatch': "Verified schema match";
     readonly 'diag.state.ok': "ok";
     readonly 'diag.state.missing': "missing";
     readonly 'diag.state.unknown': "unknown";
@@ -222,6 +224,7 @@ export declare const en: {
     readonly 'diag.migrationIgnored': "Import declined.";
     readonly 'diag.legacyBothActive': "dsh-custom-provider-settings is still active. Both plugins add request headers, so uninstall one to avoid duplicate headers.";
     readonly 'diag.probe.locale': "Locale dictionaries";
+    readonly 'doctor.dead.dead-user-agent': "Stored but ignored by DSH: {fields}. Harness strips a provider-level user-agent and sends its own attribution — set a custom User-Agent under Global headers instead.";
     readonly 'global.navLabel': "Provider Advanced";
     readonly 'global.title': "Provider Advanced Settings";
     readonly 'global.desc': "Global request headers, and the advanced settings of every provider.";

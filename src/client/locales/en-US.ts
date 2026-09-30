@@ -238,6 +238,8 @@ export const en = {
   'diag.probe.modelsExtensionPackage': 'Models extension package',
   'diag.probe.legacyNamespace': 'Legacy plugin namespace',
   'diag.probe.legacyPlugin': 'Legacy plugin package',
+  'diag.probe.retryExecutor': 'Retry executor (dsh-llm-retry)',
+  'diag.probe.versionMatch': 'Verified schema match',
   'diag.state.ok': 'ok',
   'diag.state.missing': 'missing',
   'diag.state.unknown': 'unknown',
@@ -250,6 +252,10 @@ export const en = {
   'diag.legacyBothActive':
     'dsh-custom-provider-settings is still active. Both plugins add request headers, so uninstall one to avoid duplicate headers.',
   'diag.probe.locale': 'Locale dictionaries',
+
+  // Dead provider fields (Configuration Doctor)
+  'doctor.dead.dead-user-agent':
+    'Stored but ignored by DSH: {fields}. Harness strips a provider-level user-agent and sends its own attribution — set a custom User-Agent under Global headers instead.',
 
   // Global settings page
   'global.navLabel': 'Provider Advanced',
