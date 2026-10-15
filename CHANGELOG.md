@@ -5,6 +5,50 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.7] — 2026-10-16
+
+### Fixed
+
+**The npm install route 404'd, and the release that was supposed to fix it looked green.**
+`dsh plugin add dsh-advanced-provider-settings` resolved to `ERR_PNPM_FETCH_404`: the package was
+never on the registry. The `Publish to npm` workflow added in 0.4.4 treated a missing `NPM_TOKEN` as
+a setup state worth a warning rather than a release that did not happen, so every tag since has
+printed a warning, published nothing and gone **green** — which is how the README came to advertise a
+channel that 404s. The 0.4.4 entry's "The package ships to npm" was therefore false when it was
+written, and is corrected rather than restated.
+
+- **A missing credential now fails the run** (`::error` plus `exit 1`) instead of skipping the
+  publish, and the README says the same. `NPM_TOKEN` is still absent from this repository, so
+  v0.4.7 publishes to GitHub Releases only; the npm half is a run that names what to add.
+- **The Diagnostics panel stops claiming a build it never saw.** The "verified against" row rendered
+  a compile-time constant, so on Harness 0.2.1-alpha.4 it asserted the plugin was verified against
+  0.2.0-rc.2 while `versionMatch` read `unknown`. The row now prints the list the host reports.
+
+### Added
+
+**`0.2.1-alpha.4` is verified, and the verified set is a list.** Every constant in
+`src/shared/capabilities.ts` was re-read from that build: the 26 offered `compatProfile` keys, the
+three routeable protocols, the thinking ladder and `attributionHeaders()` — which still reserves only
+`user-agent` — are unchanged, despite the bundled `pi-ai` moving 0.87.1 → 1.2.0 and `cordis` /
+`schemastery` going prerelease. A clean-room profile installed from `github:` booted with every
+diagnostic `ok`, and a route-level `compat.supportsStore` toggle written through the UI landed in
+`llm-pi-ai` on disk. So the plugin was not broken by the new Harness; the version metadata was stale
+and the install route was not.
+
+- `VERIFIED_DSH_VERSIONS` and `isVerifiedDshBuild()` replace the single `VERIFIED_DSH_VERSION`, and
+  the report carries `verifiedDshVersions`. `versionMatch` compares against the set.
+- **A fresh DSH profile refuses its first dependency.** `dsh plugin --profile <name> add …` answers
+  `ERR_PNPM_ADDING_TO_ROOT` because the CLI-created profile is a pnpm workspace root. Both READMEs now
+  document the one-line `.npmrc` fix (`ignore-workspace-root-check=true`) instead of leaving it as an
+  unexplained install failure.
+
+### Changed
+
+- Development dependencies moved to the `0.2.1-alpha.4` runtime line.
+- `@deepseek-ai/dsh-client-store` was dropped from devDependencies: it has no `0.2.1-alpha.4` publish,
+  so keeping it pinned to the line would make `npm ci` unresolvable, and nothing in this package
+  imports it — the web shell seeds it as a requirable module regardless.
+
 ## [0.4.6] — 2026-09-30
 
 ### Added

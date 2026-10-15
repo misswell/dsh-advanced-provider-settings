@@ -20,7 +20,7 @@ OpenAI 兼容 Provider 那些原本只能手改 YAML 的配置项，变成看得
 另一个字段名、厂商根本没实现的请求字段照发不误。本插件让你按路由、按模型把方言声明清楚，把思考
 档位阶梯和各档 token 预算配好，并在请求中途失败之前就看清到底会发出什么。
 
-> **状态：**`v0.4.6`，已在 DeepSeek Harness `0.2.0-rc.2` 上验证（该版本对本插件无破坏性变化）。
+> **状态：**`v0.4.7`，已在 DeepSeek Harness `0.2.0-rc.2` 与 `0.2.1-alpha.4` 上验证（两者都没有改变本插件读取的任何东西）。
 
 ---
 
@@ -104,7 +104,7 @@ DeepSeek Harness 的 Provider schema 设计得相当完整，但「模型」页�
 
 ## 安装
 
-需要 DeepSeek Harness `0.1.7`–`0.2.0` 或兼容版本，以及 Node.js 20+。
+需要 DeepSeek Harness `0.1.7`–`0.2.1` 或兼容版本，以及 Node.js 20+。
 
 两个 profile 跑的是同一个产物——同一个包，机器上无需构建。区别只在于**谁有权写入 profile**。
 
@@ -123,6 +123,10 @@ dsh plugin --profile web add https://github.com/misswell/dsh-advanced-provider-s
 两种方式都不需要在你机器上构建。`lib/` 是**故意提交进仓库**的：`dsh plugin` 不跑构建步骤，
 而 pnpm 10+ 会拦住 git 依赖的 `prepare` 脚本，所以需要构建的插件必须自带产物。
 （本包未发布到 npm，因此不提供裸包名安装。）
+
+> DSH CLI 新建的 profile 本身就是一个 pnpm workspace 根，而 pnpm 拒绝往根里添加第一个依赖：
+> `ERR_PNPM_ADDING_TO_ROOT`。在该 profile 的 `.npmrc` 里写一次
+> `ignore-workspace-root-check=true`，安装就能成功——报错信息会点名它要的那个文件。
 
 然后重启 Web UI：
 
@@ -445,7 +449,7 @@ models:
 
 ## 几个容易踩的坑
 
-以下都是 DeepSeek Harness `0.2.0-rc.2`（与 `0.1.7-*` 相同）的真实行为。本插件的做法是把它们**显示出来**，而不是藏
+以下都是 DeepSeek Harness `0.2.0-rc.2` 与 `0.2.1-alpha.4`（与 `0.1.7-*` 相同）的真实行为。本插件的做法是把它们**显示出来**，而不是藏
 起来——每一条都会在相关位置给出提示。
 
 ### 1. Provider 级的 `User-Agent` 会被丢弃
@@ -495,14 +499,16 @@ Harness 的 pi-ai 适配器会把 Provider profile 里名为 `user-agent` 的 He
 
 | DeepSeek Harness | 状态 | 说明 |
 |---|---|---|
+| `0.2.1-alpha.4` | **已验证** | 2026-10-16 重新核对并端到端跑过：用 `github:` 装进干净 profile 后启动，诊断项全部 `ok`，路由级 `compat.supportsStore` 的写入确实落到了磁盘上的 `llm-pi-ai`。尽管内置 `pi-ai` 从 0.87.1 升到 1.2.0，26 个 `compatProfile` 字段、3 种可路由协议、思考档位与 `attributionHeaders()` 与 0.2.0-rc.2 完全一致。 |
+| 其它 `0.2.1-*` | 预期可用 | 同一系列内的 alpha 历史上未改动 Provider schema，但实际只核对过 `0.2.1-alpha.4`。 |
 | `0.2.0-rc.2` | **已验证** | 本版本针对该构建重新核对了每个常量与代码路径。Provider profile、重试 schema 与客户端扩展点与 0.1.7 完全一致；唯一的行为变化是重试的执行移入了可选的 `dsh-llm-retry` 插件，诊断面板会探测它。 |
 | 其它 `0.2.0-*` | 预期可用 | 同一 patch 系列内历史上未改动 Provider schema，但未实测。 |
 | `0.1.7-*` | 预期可用 | v0.4.5 已验证；本版核对所用的 schema 在 0.1.7-rc.2 中完全一致。 |
 | `0.1.6` 及更早 | 不支持 | 0.1.7 重写了本插件赖以工作的设置层：命名空间改由 profile 条目自己的 `Config` 推导，浏览器侧改写走 `configForms` 与 `remote.settings`。这两者在 0.1.7 之前都不存在——请改装 `v0.2.1`。 |
 
 对任意一次安装，权威答案都在**诊断面板**：它报告探测到的 Harness 版本——优先读取运行进程的启动
-路径，profile 里陈旧的 `@deepseek-ai` 符号链接无法误导它——以及该版本是否就是 schema 常量所验证的
-版本、本插件命名空间与 `llm-pi-ai` 命名空间是否可用、是否支持带版本号的写入、Header 桥是否装载
+路径，profile 里陈旧的 `@deepseek-ai` 符号链接无法误导它——以及该版本是否属于 schema 常量核对过的
+构建之一（面板会把这份清单列出来）、本插件命名空间与 `llm-pi-ai` 命名空间是否可用、是否支持带版本号的写入、Header 桥是否装载
 成功、重试执行器（`dsh-llm-retry`）是否在位，以及「模型」页扩展包是否解析成功。
 
 ## 安全设计
@@ -566,7 +572,9 @@ git push origin main && git push origin vX.Y.Z
 ```
 
 tag 驱动两个渠道：`Release` 把 tgz 挂到 GitHub Release，`Publish to npm` 把同一个提交发到 npm 并附带
-provenance 证明。两者都会重跑上面的门禁；npm 那个 job 需要仓库 secret `NPM_TOKEN`。要重试或补发一个
+provenance 证明。两者都会重跑上面的门禁；npm 那个 job 需要仓库 secret `NPM_TOKEN`，**缺失时这次运行
+会直接失败**——什么都没发出去的 release 不能显示成绿色，而过去正是这样，才让 npm 渠道被写进文档、
+裸包名安装却回 404。要重试或补发一个
 已存在的 tag，手动运行 `Publish to npm` 并把该 tag 作为输入即可——npm 上已有该版本时它会自动跳过。
 
 ### 目录结构

@@ -10,7 +10,8 @@ export interface DiagnosticProbe {
 /** Everything the host half can report about compatibility. */
 export interface DiagnosticsReport {
     pluginVersion: string;
-    verifiedDshVersion: string;
+    /** Every build the capability table was verified against, oldest first. */
+    verifiedDshVersions: readonly string[];
     detectedDshVersion?: string;
     probes: DiagnosticProbe[];
     reservedHeaders: readonly string[];

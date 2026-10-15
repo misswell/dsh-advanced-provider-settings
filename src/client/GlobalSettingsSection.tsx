@@ -8,7 +8,6 @@
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, Pill, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
-import { VERIFIED_DSH_VERSION } from '../shared/capabilities.js'
 import { diffGlobalHeaders } from '../shared/patch.js'
 import { headerEntriesOf, type HeaderEntry } from '../shared/headers.js'
 import { cls } from './styles.js'
@@ -21,7 +20,7 @@ import type { ClientContext, Translate, WriteResult } from './contract.js'
 /** Diagnostics payload the host returns. */
 interface DiagnosticsResult {
   pluginVersion: string
-  verifiedDshVersion: string
+  verifiedDshVersions: string[]
   detectedDshVersion?: string
   probes: { key: string; state: 'ok' | 'missing' | 'unknown'; detail?: string }[]
   reservedHeaders: string[]
@@ -287,7 +286,10 @@ export function GlobalSettingsPage(props: { ctx: ClientContext }): ReactNode {
             label={t('diag.dshVersion')}
             value={diagnostics.data?.detectedDshVersion ?? t('diag.state.unknown')}
           />
-          <DiagRow label={t('diag.verifiedVersion')} value={VERIFIED_DSH_VERSION} />
+          <DiagRow
+            label={t('diag.verifiedVersion')}
+            value={(diagnostics.data?.verifiedDshVersions ?? []).join(', ') || '—'}
+          />
           <DiagRow label={t('diag.reservedHeaders')} value={(diagnostics.data?.reservedHeaders ?? []).join(', ') || '—'} />
           {(diagnostics.data?.probes ?? []).map((probe) => (
             <DiagRow
@@ -383,7 +385,7 @@ function CopyDiagnostics(props: { t: Translate; data: DiagnosticsResult | undefi
     const text = [
       `plugin: ${props.data.pluginVersion}`,
       `dsh: ${props.data.detectedDshVersion ?? 'unknown'}`,
-      `verified: ${props.data.verifiedDshVersion}`,
+      `verified: ${props.data.verifiedDshVersions.join(', ')}`,
       `reserved-headers: ${props.data.reservedHeaders.join(', ')}`,
       ...props.data.probes.map((probe) => `${probe.key}: ${probe.state}${probe.detail === undefined ? '' : ` (${probe.detail})`}`),
     ].join('\n')

@@ -75,21 +75,22 @@ jobs:
             echo "dsh-advanced-provider-settings@${{ steps.version.outputs.version }} is already on npm."
           fi
 
-      # A missing credential is a setup state, not a broken release: say so in the
-      # run summary instead of failing the tag, and publish later by running this
-      # workflow manually with the tag. An *expired* token still fails loudly below.
+      # A missing credential used to make this run green while publishing
+      # nothing, which is how the npm channel came to be advertised while
+      # `dsh plugin add <name>` answered 404. A release that did not happen must
+      # not look like a release that did: fail here, then re-run this workflow
+      # manually with the tag once the secret exists.
       - name: Check the npm credential
-        id: credentials
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "::warning title=No NPM_TOKEN::Skipped the npm publish. Add the repository secret NPM_TOKEN, then run this workflow manually with tag ${{ inputs.tag || github.ref_name }}."
-            echo "missing=true" >> "$GITHUB_OUTPUT"
+            echo "::error title=No NPM_TOKEN::Nothing was published. Add the repository secret NPM_TOKEN, then run this workflow manually with tag ${{ inputs.tag || github.ref_name }}."
+            exit 1
           fi
 
       - name: Publish
-        if: steps.shipped.outputs.exists != 'true' && steps.credentials.outputs.missing != 'true'
+        if: steps.shipped.outputs.exists != 'true'
         run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

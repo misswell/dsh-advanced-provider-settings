@@ -12,7 +12,8 @@ import {
   LEGACY_NAMESPACE,
   PROVIDER_NAMESPACE,
   RESERVED_HEADER_NAMES,
-  VERIFIED_DSH_VERSION,
+  VERIFIED_DSH_VERSIONS,
+  isVerifiedDshBuild,
 } from '../shared/capabilities.js'
 
 /** One probe's outcome. */
@@ -28,7 +29,8 @@ export interface DiagnosticProbe {
 /** Everything the host half can report about compatibility. */
 export interface DiagnosticsReport {
   pluginVersion: string
-  verifiedDshVersion: string
+  /** Every build the capability table was verified against, oldest first. */
+  verifiedDshVersions: readonly string[]
   detectedDshVersion?: string
   probes: DiagnosticProbe[]
   reservedHeaders: readonly string[]
@@ -196,7 +198,7 @@ export interface DiagnosticsInput {
  */
 export function buildDiagnostics(input: DiagnosticsInput): DiagnosticsReport {
   const detected = detectDshVersion()
-  const versionVerified = detected !== undefined && detected === VERIFIED_DSH_VERSION
+  const versionVerified = isVerifiedDshBuild(detected)
   const probes: DiagnosticProbe[] = [
     {
       key: 'dshVersion',
@@ -211,7 +213,7 @@ export function buildDiagnostics(input: DiagnosticsInput): DiagnosticsReport {
       state: versionVerified ? 'ok' : 'unknown',
       ...(detected === undefined || versionVerified
         ? {}
-        : { detail: `${detected} vs ${VERIFIED_DSH_VERSION}` }),
+        : { detail: `${detected} vs ${VERIFIED_DSH_VERSIONS.join(', ')}` }),
     },
     {
       key: 'settingsNamespace',
@@ -254,7 +256,7 @@ export function buildDiagnostics(input: DiagnosticsInput): DiagnosticsReport {
 
   return {
     pluginVersion: input.pluginVersion,
-    verifiedDshVersion: VERIFIED_DSH_VERSION,
+    verifiedDshVersions: VERIFIED_DSH_VERSIONS,
     ...(detected === undefined ? {} : { detectedDshVersion: detected }),
     probes,
     reservedHeaders: [...RESERVED_HEADER_NAMES],

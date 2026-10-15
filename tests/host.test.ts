@@ -612,9 +612,9 @@ describe('diagnostics', () => {
       headerRuntimeApplied: 3,
       routesRegistered: true,
     })
-    // A pinned literal, not the constant: bumping the verified build must be a
+    // Pinned literals, not the constant: adding a verified build must be a
     // deliberate edit here rather than something that drifts along with it.
-    expect(report.verifiedDshVersion).toBe('0.2.0-rc.2')
+    expect(report.verifiedDshVersions).toEqual(['0.2.0-rc.2', '0.2.1-alpha.4'])
     expect(report.reservedHeaders).toEqual(['user-agent'])
     const byKey = new Map(report.probes.map((probe) => [probe.key, probe]))
     expect(byKey.get('settingsNamespace')?.state).toBe('ok')
@@ -642,11 +642,12 @@ describe('diagnostics', () => {
     expect(executor.detail).toBe('@deepseek-ai/dsh-llm-retry')
 
     // versionMatch speaks of the constants' provenance, not of health: "ok"
-    // only when the running build IS the verified one, "unknown" otherwise —
-    // and a mismatch carries the pair, so a bug report can name both builds.
+    // when the running build is ANY verified one, "unknown" otherwise — and a
+    // mismatch carries the detected build against the whole matrix, so a bug
+    // report can name both.
     const match = byKey.get('versionMatch')!
     const detected = report.detectedDshVersion
-    if (detected === report.verifiedDshVersion) {
+    if (detected !== undefined && report.verifiedDshVersions.includes(detected)) {
       expect(match.state).toBe('ok')
       expect(match.detail).toBeUndefined()
     } else if (detected === undefined) {
@@ -655,7 +656,7 @@ describe('diagnostics', () => {
       expect(match.detail).toBeUndefined()
     } else {
       expect(match.state).toBe('unknown')
-      expect(match.detail).toBe(`${detected} vs ${report.verifiedDshVersion}`)
+      expect(match.detail).toBe(`${detected} vs ${report.verifiedDshVersions.join(', ')}`)
     }
   })
 

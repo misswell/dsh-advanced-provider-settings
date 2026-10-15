@@ -25,7 +25,8 @@ not implement is sent anyway. This plugin lets you declare the dialect per route
 the thinking ladder and its token budgets, and see what will leave the machine before a request fails
 halfway through a session.
 
-> **Status:** `v0.4.6`. Verified against DeepSeek Harness `0.2.0-rc.2` (and unchanged by it).
+> **Status:** `v0.4.7`. Verified against DeepSeek Harness `0.2.0-rc.2` and `0.2.1-alpha.4` (neither
+> changes what this plugin reads).
 
 ---
 
@@ -116,7 +117,7 @@ model entry that sets it is rejected by name.
 
 ## Install
 
-Requires DeepSeek Harness `0.1.7`–`0.2.0` or a compatible build, and Node.js 20+.
+Requires DeepSeek Harness `0.1.7`–`0.2.1` or a compatible build, and Node.js 20+.
 
 Both profiles run the same artifact — one package, no build on your machine. What differs is who is
 allowed to write to the profile.
@@ -137,6 +138,10 @@ Both work without a build on your machine. `lib/` is committed on purpose: `dsh 
 no build step, and pnpm 10+ blocks a git dependency's `prepare` script, so a plugin that needs
 building must ship its output. The package is not published to npm, so a bare-name install is
 not offered.
+
+> A profile created by the DSH CLI is a pnpm workspace root, and pnpm refuses a first dependency
+> at the root: `ERR_PNPM_ADDING_TO_ROOT`. Add once to that profile's `.npmrc` and the install
+> succeeds — `ignore-workspace-root-check=true`. The failure names the file it wants.
 
 Then restart the web UI:
 
@@ -492,8 +497,8 @@ and, on the route itself:
 
 ## Behaviours that surprise people
 
-These are properties of DeepSeek Harness `0.2.0-rc.2` (identical in `0.1.7-*`) that this plugin
-surfaces rather than hides. Each is reported in the UI at the point where it matters.
+These are properties of DeepSeek Harness `0.2.0-rc.2` and `0.2.1-alpha.4` (identical in `0.1.7-*`)
+that this plugin surfaces rather than hides. Each is reported in the UI at the point where it matters.
 
 ### 1. A provider-level `User-Agent` is discarded
 
@@ -551,6 +556,8 @@ exactly.
 
 | DeepSeek Harness | Status | Notes |
 |---|---|---|
+| `0.2.1-alpha.4` | **Verified** | Re-read on 2026-10-16 and exercised end to end: a clean profile installed from `github:` booted with every diagnostic `ok`, and the route-level `compat.supportsStore` write landed in `llm-pi-ai` on disk. The 26 `compatProfile` keys, the 3 routeable protocols, the thinking ladder and `attributionHeaders()` are unchanged from 0.2.0-rc.2 even though the bundled `pi-ai` went 0.87.1 → 1.2.0. |
+| other `0.2.1-*` | Expected to work | Alphas inside one series have not changed the provider schema historically, but only `0.2.1-alpha.4` was read out of one. |
 | `0.2.0-rc.2` | **Verified** | Every constant and code path in this release was re-read from this build and exercised against it. The provider profile, retry schema and client extension points are byte-identical to 0.1.7; the one behavioural change is that retry execution now lives in the optional `dsh-llm-retry` plugin, which the Diagnostics panel probes. |
 | other `0.2.0-*` | Expected to work | Release candidates inside one patch series have not changed the provider schema historically, but this is untested. |
 | `0.1.7-*` | Expected to work | Verified through v0.4.5; the schema this release checks against is identical in 0.1.7-rc.2. |
@@ -558,8 +565,9 @@ exactly.
 
 The Diagnostics panel is the authoritative answer for a given install. It reports the detected
 Harness version — read from the running process's launch path first, so a profile whose hoisted
-`@deepseek-ai` links still name an older runtime cannot mislead it — and whether that build is the
-one the schema constants were verified against, whether the plugin's namespace and the `llm-pi-ai`
+`@deepseek-ai` links still name an older runtime cannot mislead it — and whether that build is one
+of the ones the schema constants were verified against (the panel lists them), whether the plugin's
+namespace and the `llm-pi-ai`
 namespace are served, whether revision-fenced writes are supported, whether the header bridge
 installed, whether the retry executor (`dsh-llm-retry`) is present, and whether the Models-page
 extension package resolved.
@@ -634,7 +642,9 @@ git push origin main && git push origin vX.Y.Z
 
 The tag drives both channels: `Release` attaches the tarball to the GitHub release, and `Publish to
 npm` publishes the same commit to npm with a provenance attestation. Both re-run the gates above; the
-npm job needs the repository secret `NPM_TOKEN`. To retry or backfill a tag that already exists, run
+npm job needs the repository secret `NPM_TOKEN` and **fails the run when it is missing** — a release
+that published nothing must not look green, which is exactly how the npm channel came to be
+advertised while a bare-name install answered 404. To retry or backfill a tag that already exists, run
 `Publish to npm` manually with that tag as input — it steps aside if npm already has the version.
 
 ### Layout

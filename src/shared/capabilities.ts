@@ -26,15 +26,34 @@
  * Retry execution moved into the optional `dsh-llm-retry` plugin in 0.2.0; the
  * policy schema itself is unchanged (see diagnostics `retryExecutor`).
  *
- * `HARNESS_MATRIX` records the exact build this table was verified against; the
- * Diagnostics panel surfaces it so a bug report can name it.
+ * Re-read 2026-10-16 against the 0.2.1-alpha.4 build, with the same result: the
+ * 26 `compatProfile` keys, the three `PROTOCOLS` entries, the thinking ladder,
+ * `attributionHeaders()` (still only `user-agent`) and the Models-page slot
+ * contract are byte-for-byte what 0.2.0-rc.2 had, even though the pi-ai
+ * dependency jumped 0.87.1 → 1.2.0. Two packaging facts changed: `cordis` and
+ * `schemastery` moved to prerelease lines, and `@deepseek-ai/dsh-client-store`
+ * stopped being published as a package while the web shell still seeds it in
+ * its client module map — so it stays on the build's allow-list but is no
+ * longer a development dependency here.
+ *
+ * `VERIFIED_DSH_VERSIONS` is the matrix: the Diagnostics panel reports a match
+ * against any build on it, so a user on an older verified build is not told
+ * their combination is unverified.
  */
 
-/** The DSH build every constant in this file was verified against. */
-export const VERIFIED_DSH_VERSION = '0.2.0-rc.2'
+/** The DSH builds every constant in this file was verified against, oldest first. */
+export const VERIFIED_DSH_VERSIONS: readonly string[] = ['0.2.0-rc.2', '0.2.1-alpha.4']
+
+/**
+ * Whether a detected build is one this table was read out of.
+ * @param version - the version the host detected, if any.
+ */
+export function isVerifiedDshBuild(version: string | undefined): boolean {
+  return version !== undefined && VERIFIED_DSH_VERSIONS.includes(version)
+}
 
 /** This plugin's own version. Kept in step with package.json by the build check. */
-export const PLUGIN_VERSION = '0.4.6'
+export const PLUGIN_VERSION = '0.4.7'
 
 /** Namespace owning the OpenAI-compatible provider routes. */
 export const PROVIDER_NAMESPACE = 'llm-pi-ai'
@@ -507,7 +526,7 @@ export function isReservedHeader(name: string): boolean {
 }
 
 /** The attribution value DSH sends, shown in diagnostics and previews. */
-export function attributionUserAgent(version = VERIFIED_DSH_VERSION): string {
+export function attributionUserAgent(version = VERIFIED_DSH_VERSIONS[VERIFIED_DSH_VERSIONS.length - 1]): string {
   return `deepseek-harness/${version} (+https://github.com/deepseek-ai/deepseek-harness)`
 }
 
