@@ -5,6 +5,33 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.8] — 2026-10-19
+
+### Added
+
+**Verified against DeepSeek Harness `0.2.1-rc.2`, and the desktop app's bundled runtime can no
+longer hide the version from Diagnostics.**
+
+The provider schema is still byte-identical to 0.2.0-rc.2 — the protocol, modality, thinking,
+transport, retry and compat definitions, including the offered set of 26 compat fields, all match —
+so the capability table only gained the new build in `VERIFIED_DSH_VERSIONS`. What did change is
+where the desktop app keeps the harness:
+
+- **Version detection learned the `app.asar` layout.** The 0.2.1 desktop app ships the whole runtime
+  inside `Contents/Resources/app.asar/dsh`, so the command line names a path with no version segment
+  and Diagnostics reported the running build as unknown, which also disabled `versionMatch`.
+  Detection now finds the bundled runtime root and reads its `desktop-runtime.json` release version
+  (falling back to the runtime's `@deepseek-ai/dsh/package.json`), then `DSH_CLIENT_VERSION`, before
+  the module-resolution probes. The old `runtime/dsh/<version>` path is still recognised.
+- **Client snapshot types follow 0.2.1.** The settings snapshot no longer carries `mode`; the
+  structural types and the render-harness snapshot dropped it. No runtime behaviour depended on it.
+- **Development types moved to the `0.2.1-rc.2` runtime line** (`cordis` `4.0.5`, `schemastery`
+  `3.18.5`); the peer ranges stay at `^4.0.3` / `^3.18.3` so 0.2.0 installs remain valid.
+
+Every surface was exercised against a real 0.2.1-rc.2 runtime — provider cards, per-model
+configuration, headers, retry, network, vision, reasoning, compatibility, preview and Diagnostics —
+with no console errors.
+
 ## [0.4.7] — 2026-10-16
 
 ### Fixed

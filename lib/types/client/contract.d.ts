@@ -34,7 +34,6 @@ export interface SettingsSnapshotLike<T> {
     /** Namespace revision fencing the next write. */
     revision: number | undefined;
     writable: boolean;
-    mode: 'host' | 'memory';
 }
 /**
  * Outcome of one namespace write.
@@ -95,7 +94,6 @@ export interface SettingsFormSnapshotLike<T> {
     user: unknown;
     revision: number | undefined;
     writable: boolean;
-    mode: 'host' | 'memory';
 }
 /** The fold-a-write-answer face of the shared mirror. */
 export interface SettingsDescribeFaceLike {

@@ -67,7 +67,6 @@ const UNAVAILABLE: SettingsSnapshotLike<never> = {
   user: undefined,
   revision: undefined,
   writable: false,
-  mode: 'memory',
 }
 
 /**

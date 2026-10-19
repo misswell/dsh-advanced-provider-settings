@@ -17,7 +17,7 @@ export interface DiagnosticsReport {
     reservedHeaders: readonly string[];
 }
 /**
- * Read the running build's version out of the process command line.
+ * Pull the version segment out of launch-path entries.
  *
  * The module-resolution probes below answer "which @deepseek-ai copy does THIS
  * module see" — and that can differ from the running build, because a profile
@@ -27,11 +27,6 @@ export interface DiagnosticsReport {
  * launched from the runtime directory, so its command line names the true
  * version.
  *
- * @returns the version segment, or undefined when no argv entry matches.
- */
-/**
- * Pull the version segment out of launch-path entries.
- *
  * Exported as a pure function so tests can feed argv shapes without touching
  * the runner's own process state.
  *
@@ -40,11 +35,36 @@ export interface DiagnosticsReport {
  */
 export declare function versionFromLaunchPath(entries: readonly unknown[]): string | undefined;
 /**
+ * Find the bundled runtime root in launch-path entries.
+ *
+ * @param entries - candidate path strings (execPath + argv), any values.
+ * @returns the `app.asar/dsh` root, or undefined when the app is not bundled.
+ */
+export declare function appRuntimeRootFromLaunchPath(entries: readonly unknown[]): string | undefined;
+/**
+ * Read the version out of a bundled runtime root.
+ *
+ * `desktop-runtime.json` is the app's own release manifest and names the exact
+ * build it shipped; the package manifest is the fallback for a runtime tree
+ * laid out without it (the `dsh` CLI installed from npm, for instance).
+ *
+ * Both reads are best-effort: a runtime that cannot answer is a diagnostic
+ * detail, not a reason to throw.
+ *
+ * @param root - directory containing the bundled runtime.
+ * @returns the version string, or undefined when neither manifest is readable.
+ */
+export declare function versionFromRuntimeRoot(root: string): string | undefined;
+export declare function versionFromEnvironment(value: string | undefined): string | undefined;
+/**
  * Best-effort read of the running DSH version.
  *
- * The value is advisory: it feeds a diagnostic line and the compatibility
- * matrix, and nothing branches on it. A failure returns undefined rather than
- * throwing, because a plugin that cannot report a version is still useful.
+ * Signals are tried from most to least truthful: the launch path of the old
+ * Desk runtime, the bundled runtime manifest of the 0.2.1+ app, the desktop
+ * host's `DSH_CLIENT_VERSION`, then the module-resolution probes. The value is
+ * advisory: it feeds a diagnostic line and the compatibility matrix, and
+ * nothing branches on it. A failure returns undefined rather than throwing,
+ * because a plugin that cannot report a version is still useful.
  *
  * @returns the version string, or undefined when it cannot be read.
  */

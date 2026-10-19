@@ -18,23 +18,19 @@
  *                            profile may actually set
  *  - reserved headers:       @deepseek-ai/dsh-llm      (`attributionHeaders`)
  *
- * Verified 2026-09-30 against the 0.2.0-rc.2 build: the routeable protocol set
- * is still the three below (`mistral-conversations` exists only as a compat
- * gate, not in `PROTOCOLS`), and every compat field pi-ai 0.2 added
- * (`supportsMidConvo*`, `sessionAffinityFormat`, grammar-tool and prompt-cache
- * fields) is `"withhold"` in the gates — so the offered set of 26 is unchanged.
- * Retry execution moved into the optional `dsh-llm-retry` plugin in 0.2.0; the
- * policy schema itself is unchanged (see diagnostics `retryExecutor`).
+ * Verified 2026-10-19 against the 0.2.1-rc.2 build by diffing its pi-ai schema
+ * block against 0.2.0-rc.2: the protocol, modality, thinking, transport, retry
+ * and compat definitions are byte-identical, including the offered set of 26
+ * compat fields. The 0.2.1 release changed the client surface (per-model
+ * `reasoningEfforts` controls) and the desktop app's runtime layout, not the
+ * provider schema this table describes.
  *
- * Re-read 2026-10-16 against the 0.2.1-alpha.4 build, with the same result: the
+ * Re-read 2026-10-16 against the 0.2.1-alpha.4 build with the same result: the
  * 26 `compatProfile` keys, the three `PROTOCOLS` entries, the thinking ladder,
  * `attributionHeaders()` (still only `user-agent`) and the Models-page slot
  * contract are byte-for-byte what 0.2.0-rc.2 had, even though the pi-ai
- * dependency jumped 0.87.1 → 1.2.0. Two packaging facts changed: `cordis` and
- * `schemastery` moved to prerelease lines, and `@deepseek-ai/dsh-client-store`
- * stopped being published as a package while the web shell still seeds it in
- * its client module map — so it stays on the build's allow-list but is no
- * longer a development dependency here.
+ * dependency jumped 0.87.1 → 1.2.0. Along that line `cordis` and `schemastery`
+ * moved to prerelease versions.
  *
  * `VERIFIED_DSH_VERSIONS` is the matrix: the Diagnostics panel reports a match
  * against any build on it, so a user on an older verified build is not told
@@ -48,7 +44,7 @@ export declare const VERIFIED_DSH_VERSIONS: readonly string[];
  */
 export declare function isVerifiedDshBuild(version: string | undefined): boolean;
 /** This plugin's own version. Kept in step with package.json by the build check. */
-export declare const PLUGIN_VERSION = "0.4.7";
+export declare const PLUGIN_VERSION = "0.4.8";
 /** Namespace owning the OpenAI-compatible provider routes. */
 export declare const PROVIDER_NAMESPACE = "llm-pi-ai";
 /** Cordis / locale / registrant name. This is the package name, not a namespace. */

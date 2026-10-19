@@ -6,7 +6,9 @@
  * report "unsupported", never take the settings page down with it
  * (spec section 54).
  */
+import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { resolve } from 'node:path'
 import {
   PLUGIN_SETTINGS_NS,
   LEGACY_NAMESPACE,
@@ -60,7 +62,7 @@ const VERSION_PROBE_PACKAGES: readonly { specifier: string; manifest: () => unkn
 const RUNTIME_PATH_VERSION = /[\\/]runtime[\\/]dsh[\\/]([^/\\()\s]+)[\\/]/
 
 /**
- * Read the running build's version out of the process command line.
+ * Pull the version segment out of launch-path entries.
  *
  * The module-resolution probes below answer "which @deepseek-ai copy does THIS
  * module see" — and that can differ from the running build, because a profile
@@ -69,11 +71,6 @@ const RUNTIME_PATH_VERSION = /[\\/]runtime[\\/]dsh[\\/]([^/\\()\s]+)[\\/]/
  * 0.1.5-rc.2 links while 0.2.0-rc.2 runs). The harness process itself is
  * launched from the runtime directory, so its command line names the true
  * version.
- *
- * @returns the version segment, or undefined when no argv entry matches.
- */
-/**
- * Pull the version segment out of launch-path entries.
  *
  * Exported as a pure function so tests can feed argv shapes without touching
  * the runner's own process state.
@@ -100,17 +97,100 @@ function versionFromArgv(): string | undefined {
 }
 
 /**
+ * The desktop app ships the whole runtime inside `app.asar`, so argv names the
+ * runtime ROOT (`.../Resources/app.asar/dsh`) and no version segment. The
+ * release manifest sits beside the module tree, which is the same signal the
+ * old `runtime/dsh/<version>` path carried.
+ */
+const APP_ASAR_RUNTIME_ROOT = /^(.*?[\\/]app\.asar[\\/]dsh)(?:[\\/]|$)/
+
+/**
+ * Find the bundled runtime root in launch-path entries.
+ *
+ * @param entries - candidate path strings (execPath + argv), any values.
+ * @returns the `app.asar/dsh` root, or undefined when the app is not bundled.
+ */
+export function appRuntimeRootFromLaunchPath(entries: readonly unknown[]): string | undefined {
+  for (const entry of entries) {
+    if (typeof entry !== 'string' || entry.length === 0) continue
+    const root = entry.match(APP_ASAR_RUNTIME_ROOT)?.[1]
+    if (root !== undefined) return root
+  }
+  return undefined
+}
+
+/**
+ * Read the version out of a bundled runtime root.
+ *
+ * `desktop-runtime.json` is the app's own release manifest and names the exact
+ * build it shipped; the package manifest is the fallback for a runtime tree
+ * laid out without it (the `dsh` CLI installed from npm, for instance).
+ *
+ * Both reads are best-effort: a runtime that cannot answer is a diagnostic
+ * detail, not a reason to throw.
+ *
+ * @param root - directory containing the bundled runtime.
+ * @returns the version string, or undefined when neither manifest is readable.
+ */
+export function versionFromRuntimeRoot(root: string): string | undefined {
+  try {
+    const manifest = JSON.parse(readFileSync(resolve(root, 'desktop-runtime.json'), 'utf8')) as {
+      release?: { version?: unknown }
+    }
+    const version = manifest.release?.version
+    if (typeof version === 'string' && version.length > 0) return version
+  } catch {
+    // Fall through to the package manifest.
+  }
+  try {
+    const req = createRequire(resolve(root, 'noop.js'))
+    const manifest = req('./node_modules/@deepseek-ai/dsh/package.json') as { version?: unknown }
+    if (typeof manifest.version === 'string' && manifest.version.length > 0) return manifest.version
+  } catch {
+    // Neither manifest is reachable; the caller falls back to env or modules.
+  }
+  return undefined
+}
+
+/**
+ * A version-shaped environment value.
+ *
+ * The desktop host exports its own build as `DSH_CLIENT_VERSION`. That is the
+ * app version, which the runtime manifest above supersedes when present; it is
+ * accepted here only as a last precise signal before the module probes, which
+ * can name a hoisted copy that is not the running build.
+ */
+const VERSION_SHAPE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/
+
+export function versionFromEnvironment(value: string | undefined): string | undefined {
+  return typeof value === 'string' && VERSION_SHAPE.test(value) ? value : undefined
+}
+
+/**
  * Best-effort read of the running DSH version.
  *
- * The value is advisory: it feeds a diagnostic line and the compatibility
- * matrix, and nothing branches on it. A failure returns undefined rather than
- * throwing, because a plugin that cannot report a version is still useful.
+ * Signals are tried from most to least truthful: the launch path of the old
+ * Desk runtime, the bundled runtime manifest of the 0.2.1+ app, the desktop
+ * host's `DSH_CLIENT_VERSION`, then the module-resolution probes. The value is
+ * advisory: it feeds a diagnostic line and the compatibility matrix, and
+ * nothing branches on it. A failure returns undefined rather than throwing,
+ * because a plugin that cannot report a version is still useful.
  *
  * @returns the version string, or undefined when it cannot be read.
  */
 export function detectDshVersion(): string | undefined {
   const fromArgv = versionFromArgv()
   if (fromArgv !== undefined) return fromArgv
+
+  const runtimeRoot = appRuntimeRootFromLaunchPath(launchPathEntries())
+  if (runtimeRoot !== undefined) {
+    const fromBundle = versionFromRuntimeRoot(runtimeRoot)
+    if (fromBundle !== undefined) return fromBundle
+  }
+
+  const fromEnvironment = versionFromEnvironment(process.env.DSH_CLIENT_VERSION)
+  if (fromEnvironment !== undefined) return fromEnvironment
+
   try {
     for (const { manifest } of VERSION_PROBE_PACKAGES) {
       try {

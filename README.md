@@ -25,8 +25,8 @@ not implement is sent anyway. This plugin lets you declare the dialect per route
 the thinking ladder and its token budgets, and see what will leave the machine before a request fails
 halfway through a session.
 
-> **Status:** `v0.4.7`. Verified against DeepSeek Harness `0.2.0-rc.2` and `0.2.1-alpha.4` (neither
-> changes what this plugin reads).
+> **Status:** `v0.4.8`. Verified against DeepSeek Harness `0.2.0-rc.2`, `0.2.1-alpha.4` and
+> `0.2.1-rc.2` (none changes what this plugin reads).
 
 ---
 
@@ -497,8 +497,9 @@ and, on the route itself:
 
 ## Behaviours that surprise people
 
-These are properties of DeepSeek Harness `0.2.0-rc.2` and `0.2.1-alpha.4` (identical in `0.1.7-*`)
-that this plugin surfaces rather than hides. Each is reported in the UI at the point where it matters.
+These are properties of DeepSeek Harness `0.2.0-rc.2`, `0.2.1-alpha.4` and `0.2.1-rc.2` (identical
+in `0.1.7-*`) that this plugin surfaces rather than hides. Each is reported in the UI at the point
+where it matters.
 
 ### 1. A provider-level `User-Agent` is discarded
 
@@ -556,18 +557,19 @@ exactly.
 
 | DeepSeek Harness | Status | Notes |
 |---|---|---|
+| `0.2.1-rc.2` | **Verified** | Every constant was re-read from this build and every surface was exercised against it. The provider schema is byte-identical to 0.2.0-rc.2; what changed is the desktop app's runtime layout, which the Diagnostics version detection now understands. |
+| other `0.2.1-*` | Expected to work | Alphas and release candidates inside one series have not changed the provider schema historically, but only `0.2.1-alpha.4` and `0.2.1-rc.2` were read out of one. |
 | `0.2.1-alpha.4` | **Verified** | Re-read on 2026-10-16 and exercised end to end: a clean profile installed from `github:` booted with every diagnostic `ok`, and the route-level `compat.supportsStore` write landed in `llm-pi-ai` on disk. The 26 `compatProfile` keys, the 3 routeable protocols, the thinking ladder and `attributionHeaders()` are unchanged from 0.2.0-rc.2 even though the bundled `pi-ai` went 0.87.1 → 1.2.0. |
-| other `0.2.1-*` | Expected to work | Alphas inside one series have not changed the provider schema historically, but only `0.2.1-alpha.4` was read out of one. |
 | `0.2.0-rc.2` | **Verified** | Every constant and code path in this release was re-read from this build and exercised against it. The provider profile, retry schema and client extension points are byte-identical to 0.1.7; the one behavioural change is that retry execution now lives in the optional `dsh-llm-retry` plugin, which the Diagnostics panel probes. |
 | other `0.2.0-*` | Expected to work | Release candidates inside one patch series have not changed the provider schema historically, but this is untested. |
 | `0.1.7-*` | Expected to work | Verified through v0.4.5; the schema this release checks against is identical in 0.1.7-rc.2. |
 | `0.1.6` and earlier | Unsupported | 0.1.7 rewrote the settings layer this plugin is built on: a namespace is now derived from a profile entry's own `Config`, and the browser writes through `configForms` and `remote.settings`. Neither exists before 0.1.7 — install `v0.2.1` there instead. |
 
 The Diagnostics panel is the authoritative answer for a given install. It reports the detected
-Harness version — read from the running process's launch path first, so a profile whose hoisted
-`@deepseek-ai` links still name an older runtime cannot mislead it — and whether that build is one
-of the ones the schema constants were verified against (the panel lists them), whether the plugin's
-namespace and the `llm-pi-ai`
+Harness version — read from the running process's launch path, including the `app.asar`-bundled
+runtime introduced in 0.2.1, whose release manifest names the exact build — and whether that build
+is one of the ones the schema constants were verified against (the panel lists them), whether the
+plugin's namespace and the `llm-pi-ai`
 namespace are served, whether revision-fenced writes are supported, whether the header bridge
 installed, whether the retry executor (`dsh-llm-retry`) is present, and whether the Models-page
 extension package resolved.

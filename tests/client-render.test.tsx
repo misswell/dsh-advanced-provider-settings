@@ -83,7 +83,6 @@ function snapshot<T>(value: T | undefined, revision: number, writable = true): S
     user: undefined,
     revision,
     writable,
-    mode: 'host',
   }
 }
 

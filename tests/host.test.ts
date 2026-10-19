@@ -6,7 +6,10 @@
  * that exists only in the unsaved form still reaches the provider" — is exactly
  * the claim a mocked transport would quietly grant for free.
  */
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { HeaderRuntime } from '../src/host/header-runtime.js'
 import { discoveryHeaders, failureFacts, runDiscovery } from '../src/host/discovery.js'
@@ -37,7 +40,13 @@ import {
 } from '../src/host/settings.js'
 import { resolveEffectiveHeaders, headerAdvisories, overridesAttribution } from '../src/host/header-resolver.js'
 import { validateProviderDraft, hasBlockingIssue } from '../src/host/validation.js'
-import { buildDiagnostics, versionFromLaunchPath } from '../src/host/diagnostics.js'
+import {
+  appRuntimeRootFromLaunchPath,
+  buildDiagnostics,
+  versionFromEnvironment,
+  versionFromLaunchPath,
+  versionFromRuntimeRoot,
+} from '../src/host/diagnostics.js'
 import { findDeadFields } from '../src/shared/dead-fields.js'
 import { LEGACY_NAMESPACE, PLUGIN_SETTINGS_NS, PROVIDER_NAMESPACE } from '../src/shared/capabilities.js'
 import type { PluginSettings, ProviderProfile } from '../src/shared/types.js'
@@ -614,7 +623,7 @@ describe('diagnostics', () => {
     })
     // Pinned literals, not the constant: adding a verified build must be a
     // deliberate edit here rather than something that drifts along with it.
-    expect(report.verifiedDshVersions).toEqual(['0.2.0-rc.2', '0.2.1-alpha.4'])
+    expect(report.verifiedDshVersions).toEqual(['0.2.0-rc.2', '0.2.1-alpha.4', '0.2.1-rc.2'])
     expect(report.reservedHeaders).toEqual(['user-agent'])
     const byKey = new Map(report.probes.map((probe) => [probe.key, probe]))
     expect(byKey.get('settingsNamespace')?.state).toBe('ok')
@@ -687,6 +696,50 @@ describe('diagnostics', () => {
     ).toBe('0.2.0-rc.2')
     expect(versionFromLaunchPath(['dsh', '--profile', 'web'])).toBeUndefined()
     expect(versionFromLaunchPath([42, null, undefined])).toBeUndefined()
+  })
+
+  it('finds the bundled runtime root when the app ships DSH inside app.asar', () => {
+    const root = '/Applications/DeepSeek Harness.app/Contents/Resources/app.asar/dsh'
+    expect(
+      appRuntimeRootFromLaunchPath([
+        '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness',
+        `${root}/node_modules/@deepseek-ai/dsh/lib/bin.js`,
+        '--profile',
+        'desktop',
+      ]),
+    ).toBe(root)
+    expect(appRuntimeRootFromLaunchPath(['node', '/usr/local/lib/node_modules/dsh/lib/bin.js'])).toBeUndefined()
+    expect(appRuntimeRootFromLaunchPath([42, null, undefined])).toBeUndefined()
+  })
+
+  it('reads the version from the bundled runtime manifests', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-diag-'))
+    try {
+      // The app's own release manifest wins: it names the exact build shipped.
+      writeFileSync(join(root, 'desktop-runtime.json'), JSON.stringify({ release: { version: '0.2.1-rc.2' } }))
+      expect(versionFromRuntimeRoot(root)).toBe('0.2.1-rc.2')
+
+      // A runtime tree installed from npm has no release manifest; the package
+      // manifest beside the module tree is the fallback.
+      rmSync(join(root, 'desktop-runtime.json'))
+      const pkgDir = join(root, 'node_modules', '@deepseek-ai', 'dsh')
+      mkdirSync(pkgDir, { recursive: true })
+      writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ version: '0.2.0-rc.2' }))
+      expect(versionFromRuntimeRoot(root)).toBe('0.2.0-rc.2')
+
+      // A directory that answers with neither is a diagnostic detail, not a throw.
+      expect(versionFromRuntimeRoot(join(root, 'missing'))).toBeUndefined()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('accepts only a version-shaped environment value', () => {
+    expect(versionFromEnvironment('0.2.1-rc.2')).toBe('0.2.1-rc.2')
+    expect(versionFromEnvironment('0.2.1')).toBe('0.2.1')
+    expect(versionFromEnvironment('desktop')).toBeUndefined()
+    expect(versionFromEnvironment('')).toBeUndefined()
+    expect(versionFromEnvironment(undefined)).toBeUndefined()
   })
 })
 
